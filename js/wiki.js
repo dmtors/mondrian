@@ -87,6 +87,24 @@ export async function search(text, signal) {
     .map((p) => ({ title: p.title, description: p.description || '', thumbnail: p.thumbnail?.source || null }));
 }
 
+/**
+ * Random articles, straight from Wikipedia's random-article list: mostly
+ * obscure ones, with few writers, references and readers, so they make very
+ * different sounds from the well-known [SURPRISES]. Fetched twenty at a time
+ * and handed out one by one.
+ */
+let randomPool = [];
+let randomFetch = null;
+export async function randomArticle() {
+  if (!randomPool.length) {
+    randomFetch ||= query({ list: 'random', rnnamespace: '0', rnfilterredir: 'nonredirects', rnlimit: '20' })
+      .then((data) => (randomPool = (data.query?.random || []).map((r) => r.title)))
+      .finally(() => (randomFetch = null));
+    await randomFetch;
+  }
+  return randomPool.shift() || null;
+}
+
 /** Broad, well-linked subjects for a surprise slot: they make lively sounds. */
 export const SURPRISES = [
   'Coffee', 'Ancient Rome', 'Jupiter', 'Basketball', 'Taylor Swift', 'Chess', 'Volcano', 'Jazz', 'Ancient Egypt',

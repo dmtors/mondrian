@@ -4,7 +4,7 @@ import { knob } from './knob.js';
 import { MOOD_PICTURES, commonsPage } from './mood-pictures.js';
 import { infinity } from './infinity.js';
 import { Synth, SoundMap, soundOf } from './synth.js';
-import { articleSignals, search, articleUrl, SURPRISES, STARTER } from './wiki.js';
+import { articleSignals, search, articleUrl, randomArticle, SURPRISES, STARTER } from './wiki.js';
 
 const LABELS = { waveform: 'Waveform', filter: 'Filter', envelope: 'Envelope', effect: 'Effect' };
 const HINTS = {
@@ -222,8 +222,25 @@ async function newSound() {
   if (roll === rolls) preview();
 }
 
+/**
+ * A surprise article: usually (three times in five) a truly random one,
+ * likely obscure, with few writers, references and readers, so the sound
+ * changes a lot; otherwise a well-known one from the curated list. Falls back
+ * to the curated list if Wikipedia can't be reached.
+ */
+const RANDOM_SHARE = 0.6;
+async function surpriseTitle() {
+  if (Math.random() < RANDOM_SHARE) {
+    try {
+      const title = await randomArticle();
+      if (title && !titleList().includes(title)) return title;
+    } catch {}
+  }
+  return pickSurprise();
+}
+
 function surprise(slots = SLOTS) {
-  return Promise.all(slots.map((slot) => setSlot(slot, pickSurprise())));
+  return Promise.all(slots.map(async (slot) => setSlot(slot, await surpriseTitle())));
 }
 
 // ---------- Rendering ----------
@@ -531,14 +548,22 @@ function openMenu(open) {
   if (open) fitMenu();
 }
 
-/** Keeps the menu inside the window: it scrolls within whatever room is left below the field. */
+/**
+ * Keeps the menu inside what can be seen: it scrolls within the room left
+ * below the field. On a phone that's the visual viewport, which shrinks when
+ * the on-screen keyboard opens, so the menu never runs under the keyboard.
+ */
 function fitMenu() {
   const list = $('picker-results');
   if ($('picker-menu').hidden) return;
-  const room = window.innerHeight - list.getBoundingClientRect().top - 16;
+  const view = window.visualViewport;
+  const bottom = view ? view.offsetTop + view.height : window.innerHeight;
+  const room = bottom - list.getBoundingClientRect().top - 16;
   list.style.maxHeight = `${Math.max(120, Math.min(416, room))}px`;
 }
 window.addEventListener('resize', fitMenu);
+window.visualViewport?.addEventListener('resize', fitMenu);
+window.visualViewport?.addEventListener('scroll', fitMenu);
 
 function highlight(index) {
   highlighted = index;

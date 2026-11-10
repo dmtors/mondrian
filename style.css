@@ -384,6 +384,12 @@ dialog {
 }
 dialog::backdrop { background-color: var(--background-color-backdrop-dark); }
 dialog .cdx-dialog { max-width: 32rem; max-height: calc(100dvh - var(--spacing-200)); }
+/* On a phone the picker sits at the top, not the middle, so the on-screen
+   keyboard (which covers the bottom of the screen) never hides its search
+   field or the suggestions under it. */
+@media (max-width: 640px) {
+  #picker { margin-top: var(--spacing-100); margin-bottom: auto; }
+}
 dialog .cdx-dialog__body { display: flex; flex-direction: column; gap: var(--spacing-75); }
 #about .cdx-dialog__body ul { margin: 0; padding-left: var(--spacing-125); display: grid; gap: var(--spacing-50); } /* How it works's bullet lists (not the picker's menu) */
 
