@@ -1,21 +1,40 @@
-// The painting a patch makes: one rectangle per note, every rectangle touching
-// its neighbours, the lowest note far bigger than the highest. The four article
-// titles decide the arrangement, and each slot's article claims a rectangle to
-// colour (waveform red, filter blue, envelope yellow, effect black). The same
-// articles always make the same painting.
+// The painting a patch makes, after Mondrian's Broadway Boogie Woogie: streets
+// of equal squares crossing a white ground, with a few bigger blocks in the
+// fields between them. There is no black. Every shape is one of four colours,
+// and each colour is a note, so the same note lives in many places; its size
+// picks the octave, from the large blocks (lowest) to the squares on the
+// streets (highest). White is quiet.
+// The four article titles decide where the streets and blocks go and how the
+// squares are coloured: the same articles always make the same painting.
 
 export const SLOTS = ['waveform', 'filter', 'envelope', 'effect'];
 
+/** The four colours, in the order of the notes they play (lowest first). */
+export const COLOURS = ['yellow', 'red', 'blue', 'grey'];
+
 /**
- * The reference notes the layout is sized from (C major pentatonic, C4–G5):
- * rectangle i is always the i-th lowest note, whatever key and scale is played.
+ * The four sizes, lowest note first: each plays its colour's note in its own
+ * octave. Large blocks are lowest, then medium, then small; the squares on the
+ * streets are highest.
  */
-export const NOTES = [60, 62, 64, 67, 69, 72, 74, 76, 79];
+export const REGISTERS = ['large', 'medium', 'small', 'square'];
 
-export const PAINT_FOR = { waveform: 'red', filter: 'blue', envelope: 'yellow', effect: 'black' };
+/** Width × height, in squares, that each size of block can take. */
+const BLOCK_SIZES = {
+  small: [[1, 2], [2, 1], [2, 2]],
+  medium: [[2, 3], [3, 2], [2, 4], [4, 2]],
+  large: [[3, 3], [3, 4], [4, 3], [4, 4], [3, 5], [5, 3], [4, 5], [5, 4], [5, 5], [4, 6], [6, 4], [3, 6], [6, 3]],
+};
 
-/** How much bigger lower notes are: area ∝ wavelength^SIZE_CONTRAST, so C4 is ~22× G5. */
-const SIZE_CONTRAST = 2.8;
+/** Which of REGISTERS a shape plays in, by its size (an inner block too). */
+function registerOf(shape) {
+  if (shape.kind === 'square') return 3;
+  const area = shape.w * shape.h;
+  return area <= 4 ? 2 : area <= 8 ? 1 : 0;
+}
+
+/** Squares across the painting's shorter side; the longer side gets as many as fit. */
+const SHORT_SIDE = 24;
 
 export const frequency = (midi) => 440 * 2 ** ((midi - 69) / 12);
 
@@ -37,77 +56,195 @@ function seeded(seed) {
   };
 }
 
+/** One random number for one square, so a square keeps its colour when the window changes size. */
+const cellRandom = (seed, row, col, salt) =>
+  seeded(seed ^ Math.imul(row + 1, 73856093) ^ Math.imul(col + 1, 19349663) ^ Math.imul(salt, 83492791))();
+
+/** [[weight, value], …] → a value, chosen by [r] in 0–1. */
+function weighted(options, r) {
+  const total = options.reduce((sum, [w]) => sum + w, 0);
+  let at = r * total;
+  for (const [w, value] of options) if ((at -= w) < 0) return value;
+  return options[options.length - 1][1];
+}
+
+/** How many squares across and down a painting of W × H pixels has. */
+export function gridFor(W, H) {
+  const size = Math.min(W, H) / SHORT_SIDE;
+  return { cols: Math.max(1, Math.round(W / size)), rows: Math.max(1, Math.round(H / size)) };
+}
+
 /**
- * The painting in a unit square: [{ index, note, l, t, r, b, paint }], one per note.
+ * Where the streets run, as fractions of the way across: some close in pairs,
+ * most with a field between, a few far apart; near both edges, as in the painting.
+ */
+function streetPositions(random) {
+  const out = [];
+  let f = 0.01 + random() * 0.04;
+  while (f < 0.985) {
+    out.push(f);
+    const r = random();
+    f += r < 0.2 ? 0.04 + random() * 0.03 : r < 0.6 ? 0.14 + random() * 0.08 : 0.24 + random() * 0.1;
+  }
+  return out;
+}
+
+/** Fractions → square indices along a side of [n], at least one white square apart. */
+function snap(fractions, n) {
+  const out = [];
+  for (const f of fractions) {
+    const i = Math.min(n - 1, Math.round(f * (n - 1)));
+    if (!out.length || i - out[out.length - 1] >= 2) out.push(i);
+  }
+  return out;
+}
+
+/**
+ * The painting on a [cols] × [rows] grid of squares:
+ * { cols, rows, shapes: [{ id, kind: 'square' | 'block', colour, register, col, row, w, h }] }
+ * in grid units, [register] indexing REGISTERS. Squares are 1 × 1 and lie on the
+ * streets; blocks are bigger, sit in the fields, and may hold a smaller block
+ * (listed after, so on top).
  * [titles] are the four articles in slot order.
  */
-export function paint(titles) {
-  const random = seeded(hash(titles.join('|')));
-  const weights = NOTES.map((n) => (1 / frequency(n)) ** SIZE_CONTRAST);
-  const boxes = {};
-  place(tree(weights, random), [0, 0, 1, 1], 0.5, 0.5, random, boxes);
+export function paint(titles, cols, rows) {
+  const seed = hash(titles.join('|'));
+  const random = seeded(seed);
 
-  // Colours: each article claims a rectangle (its own pick, the next free one if taken).
-  const paints = NOTES.map(() => 'white');
-  SLOTS.forEach((slot, k) => {
-    const colour = PAINT_FOR[slot];
-    let i = Math.abs(hash(titles[k] || '')) % NOTES.length;
-    // Black stays small, as in Mondrian: it never takes the biggest rectangles.
-    while (paints[i] !== 'white' || (colour === 'black' && i < 3)) i = (i + 1) % NOTES.length;
-    paints[i] = colour;
-  });
+  // Full-length streets, then a few short ones running between two crossings.
+  const xs = snap(streetPositions(random), cols); // vertical streets, by column
+  const ys = snap(streetPositions(random), rows); // horizontal streets, by row
+  const vertical = Array.from({ length: rows }, () => new Uint8Array(cols));
+  const horizontal = Array.from({ length: rows }, () => new Uint8Array(cols));
+  xs.forEach((c) => vertical.forEach((line) => (line[c] = 1)));
+  ys.forEach((r) => horizontal[r].fill(1));
 
-  return NOTES.map((note, index) => {
-    const [l, t, r, b] = boxes[index];
-    return { index, note, l, t, r, b, paint: paints[index] };
-  });
+  const shortStreets = (parallel, crossings, n, lay) => {
+    for (let k = 0; k < 3; k++) {
+      const at = Math.round(random() * (n - 1));
+      const from = Math.floor(random() * crossings.length);
+      const to = Math.min(crossings.length - 1, from + 1 + Math.floor(random() * 2));
+      // Not on or beside a full street, or it would read as a double one.
+      if (from === to || parallel.some((p) => Math.abs(p - at) < 2)) continue;
+      lay(at, crossings[from], crossings[to]);
+    }
+  };
+  shortStreets(ys, xs, rows, (r, c0, c1) => { for (let c = c0; c <= c1; c++) horizontal[r][c] = 1; });
+  shortStreets(xs, ys, cols, (c, r0, r1) => { for (let r = r0; r <= r1; r++) vertical[r][c] = 1; });
+
+  const onStreet = (r, c) => horizontal[r][c] || vertical[r][c];
+
+  // The squares: mostly yellow, with a red, blue or grey one every few, and
+  // crossings usually coloured. Never two coloured squares in a row.
+  const colours = Array.from({ length: rows }, () => new Array(cols).fill(null));
+  const isAccent = (r, c) => colours[r][c] && colours[r][c] !== 'yellow';
+  const accent = (r) => weighted([[0.38, 'red'], [0.36, 'blue'], [0.26, 'grey']], r);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (!onStreet(r, c)) continue;
+      const crossing = horizontal[r][c] && vertical[r][c];
+      const besideAccent = (c > 0 && horizontal[r][c] && isAccent(r, c - 1)) || (r > 0 && vertical[r][c] && isAccent(r - 1, c));
+      const coloured = !besideAccent && cellRandom(seed, r, c, 1) < (crossing ? 0.65 : 0.3);
+      colours[r][c] = coloured ? accent(cellRandom(seed, r, c, 2)) : 'yellow';
+    }
+  }
+
+  const shapes = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (colours[r][c]) shapes.push({ kind: 'square', colour: colours[r][c], col: c, row: r, w: 1, h: 1 });
+    }
+  }
+
+  // The blocks, in the fields between full streets: first one of every size
+  // and colour, so every note has a shape to play it, then more at random.
+  const taken = Array.from({ length: rows }, () => new Uint8Array(cols));
+  const bx = [-1, ...xs, cols];
+  const by = [-1, ...ys, rows];
+  const fields = [];
+  for (let j = 0; j < by.length - 1; j++) {
+    for (let i = 0; i < bx.length - 1; i++) {
+      const c0 = bx[i] + 1;
+      const r0 = by[j] + 1;
+      const fw = bx[i + 1] - c0;
+      const fh = by[j + 1] - r0;
+      if (fw >= 1 && fh >= 1) fields.push({ c0, r0, fw, fh });
+    }
+  }
+  const shuffled = (list) => {
+    const out = [...list];
+    for (let i = out.length - 1; i > 0; i--) {
+      const k = Math.floor(random() * (i + 1));
+      [out[i], out[k]] = [out[k], out[i]];
+    }
+    return out;
+  };
+
+  // Each block stays a shape of its own: white between it and any other block,
+  // between a yellow or grey one and the (yellow) streets, and never beside a
+  // square of its own colour. Red and blue blocks may lean on a street.
+  const canPlace = (colour, col, row, w, h) => {
+    const keepsOff = colour === 'yellow' || colour === 'grey';
+    for (let r = row - 1; r <= row + h; r++) {
+      for (let c = col - 1; c <= col + w; c++) {
+        if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
+        const inside = r >= row && r < row + h && c >= col && c < col + w;
+        if (taken[r][c] || (onStreet(r, c) && (inside || keepsOff || colours[r][c] === colour))) return false;
+      }
+    }
+    return true;
+  };
+  const touchesStreet = (col, row, w, h) =>
+    (col > 0 && onStreet(row, col - 1)) || (row > 0 && onStreet(row - 1, col)) ||
+    (col + w < cols && onStreet(row, col + w)) || (row + h < rows && onStreet(row + h, col));
+
+  const place = (size, colour) => {
+    for (const [w, h] of shuffled(BLOCK_SIZES[size])) {
+      for (const { c0, r0, fw, fh } of shuffled(fields)) {
+        // Never filling a field: some white is always left.
+        if (w > fw || h > fh || (w === fw && h === fh)) continue;
+        const spots = [];
+        for (let row = r0; row + h <= r0 + fh; row++) {
+          for (let col = c0; col + w <= c0 + fw; col++) if (canPlace(colour, col, row, w, h)) spots.push([col, row]);
+        }
+        if (!spots.length) continue;
+        // Mostly against a street, as in the painting, when it can be.
+        const leaning = spots.filter(([col, row]) => touchesStreet(col, row, w, h));
+        const pool = leaning.length && random() < 0.7 ? leaning : spots;
+        const [col, row] = pool[Math.floor(random() * pool.length)];
+        for (let r = row; r < row + h; r++) for (let c = col; c < col + w; c++) taken[r][c] = 1;
+        shapes.push({ kind: 'block', colour, col, row, w, h });
+        // Often a smaller block inside a big one, in another colour (grey or yellow most of all).
+        if (w >= 3 && h >= 3 && random() < 0.5) {
+          const iw = Math.max(1, Math.round(w * 0.42));
+          const ih = Math.max(1, Math.round(h * 0.42));
+          const others = [[0.4, 'grey'], [0.3, 'yellow'], [0.15, 'red'], [0.15, 'blue']].filter(([, k]) => k !== colour);
+          shapes.push({ kind: 'block', colour: weighted(others, random()), col: col + (w - iw) / 2, row: row + (h - ih) / 2, w: iw, h: ih });
+        }
+        return true;
+      }
+    }
+    return false;
+  };
+
+  for (const size of ['large', 'medium', 'small']) for (const colour of shuffled(COLOURS)) place(size, colour);
+  const extra = Math.round(fields.length * 0.5);
+  for (let k = 0; k < extra; k++) {
+    const size = weighted([[0.5, 'small'], [0.35, 'medium'], [0.15, 'large']], random());
+    place(size, weighted([[0.36, 'red'], [0.32, 'blue'], [0.18, 'yellow'], [0.14, 'grey']], random()));
+  }
+
+  shapes.forEach((shape) => (shape.register = registerOf(shape)));
+  shapes.forEach((shape, id) => (shape.id = id));
+  return { cols, rows, shapes };
 }
 
-/**
- * Pairs notes into a tree by joining small groups first, so a tiny note sits
- * beside other small ones rather than as a sliver off a big one. [random]
- * varies which pairs join (among the smallest few) and their order.
- */
-function tree(weights, random) {
-  const nodes = weights.map((weight, note) => ({ weight, note }));
-  while (nodes.length > 1) {
-    nodes.sort((x, y) => x.weight - y.weight);
-    const a = nodes.shift();
-    // Usually the next smallest; sometimes the one after, for variety.
-    const pick = nodes.length > 1 && Math.floor(random() * 3) === 0 ? 1 : 0;
-    const [b] = nodes.splice(pick, 1);
-    const [first, second] = random() < 0.5 ? [a, b] : [b, a];
-    nodes.push({ weight: a.weight + b.weight, first, second });
+/** The shape at a point in grid units (the topmost, for a block inside a block), or null on white. */
+export function shapeAt(painting, x, y) {
+  const { shapes } = painting;
+  for (let i = shapes.length - 1; i >= 0; i--) {
+    const s = shapes[i];
+    if (x >= s.col && x < s.col + s.w && y >= s.row && y < s.row + s.h) return s;
   }
-  return nodes[0];
-}
-
-/**
- * Cuts [box] between a node's two groups in proportion to their weight, across
- * its longer side (either way when nearly square). The lighter group goes on
- * the side nearer the centre, so small notes gather in the middle and big
- * ones reach the edge.
- */
-function place(node, box, cx, cy, random, out) {
-  if (node.note !== undefined) {
-    out[node.note] = box;
-    return;
-  }
-  const [heavy, light] = node.first.weight >= node.second.weight ? [node.first, node.second] : [node.second, node.first];
-  const [l, t, r, b] = box;
-  const w = r - l;
-  const h = b - t;
-  const across = Math.abs(w - h) < 0.15 * Math.max(w, h) ? random() < 0.5 : w >= h;
-  const share = light.weight / node.weight;
-  if (across) {
-    const lightRight = (l + r) / 2 < cx;
-    const x = lightRight ? r - w * share : l + w * share;
-    place(heavy, lightRight ? [l, t, x, b] : [x, t, r, b], cx, cy, random, out);
-    place(light, lightRight ? [x, t, r, b] : [l, t, x, b], cx, cy, random, out);
-  } else {
-    const lightBelow = (t + b) / 2 < cy;
-    const y = lightBelow ? b - h * share : t + h * share;
-    place(heavy, lightBelow ? [l, t, r, y] : [l, y, r, b], cx, cy, random, out);
-    place(light, lightBelow ? [l, y, r, b] : [l, t, r, y], cx, cy, random, out);
-  }
+  return null;
 }

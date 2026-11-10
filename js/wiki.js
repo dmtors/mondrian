@@ -1,10 +1,13 @@
 // Reading articles from Wikipedia: what each one does to the sound, and search.
-// Browser requests can't set a User-Agent, so we send Api-User-Agent instead
-// and keep requests few (one per article, debounced search).
+// The sound comes from each article's trust signals in the Wikimedia
+// Attribution API (beta): contributors, references, page views, last update
+// and trending. Browser requests can't set a User-Agent, so we send
+// Api-User-Agent instead and keep requests few (two per article, debounced search).
 
 const LANG = 'en';
 const API = `https://${LANG}.wikipedia.org/w/api.php`;
-const HEADERS = { 'Api-User-Agent': 'Mondrian/0.1 (articles-as-instrument mini site)' };
+const ATTRIBUTION = `https://${LANG}.wikipedia.org/w/rest.php/attribution/v0-beta/pages`;
+const HEADERS = { 'Api-User-Agent': 'Mondrian/0.1 (https://dmtors.github.io/mondrian/)' };
 
 export const articleUrl = (title) => `https://${LANG}.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
 
@@ -20,46 +23,42 @@ async function query(params, signal) {
 
 const cache = new Map();
 
+/** An article's trust signals from the Attribution API, or null if it has none. */
+async function trustSignals(title) {
+  const url = `${ATTRIBUTION}/${encodeURIComponent(title.replace(/ /g, '_'))}/signals?expand=trust_and_relevance`;
+  const response = await fetch(url, { headers: HEADERS });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
 /**
- * What an article does to the sound, in one request: incoming links, creation
- * date and topic (from the search index), plus edits in the last 30 days
- * (capped at 50), and a thumbnail when it has a lead image. Null when there's no such article.
+ * What an article does to the sound: its trust signals (contributors,
+ * references, page views in the last 30 days, last update, trending), plus a
+ * thumbnail when it has a lead image and the link to credit it by. Two
+ * requests: one to settle the title (following redirects) and find the
+ * thumbnail, one for the signals. Null when there's no such article.
  */
 export async function articleSignals(title) {
   const key = title.trim().toLowerCase();
   if (cache.has(key)) return cache.get(key);
-  const since = new Date(Date.now() - 30 * 86400e3).toISOString();
-  const data = await query({
-    redirects: '1',
-    titles: title,
-    prop: 'cirrusdoc|revisions|pageimages',
-    piprop: 'thumbnail',
-    pithumbsize: '160',
-    cdincludes: 'incoming_links|create_timestamp|weighted_tags',
-    rvprop: 'timestamp',
-    rvlimit: '50',
-    rvend: since,
-  });
+  const data = await query({ redirects: '1', titles: title, prop: 'pageimages', piprop: 'thumbnail', pithumbsize: '120' });
   const page = data.query?.pages?.[0];
   if (!page || page.missing || page.invalid) return null;
-  const doc = page.cirrusdoc?.[0]?.source;
-  if (!doc) return null;
-
-  // The strongest topic: "articletopic/STEM.Space|988" → STEM (and, in detail, "Space").
-  const strongest = (doc.weighted_tags || [])
-    .filter((t) => t.startsWith('classification.prediction.articletopic/'))
-    .map((t) => ({ name: t.slice(t.indexOf('/') + 1, t.lastIndexOf('|')), score: +t.slice(t.lastIndexOf('|') + 1) || 0 }))
-    .sort((a, b) => b.score - a.score)[0]?.name;
-  const created = doc.create_timestamp ? Date.parse(doc.create_timestamp) : NaN;
+  const signals = await trustSignals(page.title);
+  if (!signals) return null;
+  const trust = signals.trust_and_relevance || {};
+  const trending = trust.trending?.top || {};
+  const updated = trust.last_updated ? Date.parse(trust.last_updated) : NaN;
 
   const article = {
     title: page.title,
-    incomingLinks: doc.incoming_links || 0,
-    createdYear: Number.isNaN(created) ? null : new Date(created).getUTCFullYear(),
-    ageYears: Number.isNaN(created) ? 0 : Math.max(0, (Date.now() - created) / (365.25 * 86400e3)),
-    topic: strongest ? strongest.split('.')[0] : null,
-    topicDetail: strongest ? strongest.split('.').pop().replace(/_/g, ' ').replace(/\*$/, '').trim() : null,
-    editsLastMonth: (page.revisions || []).length,
+    contributors: trust.contributor_counts?.total_unique ?? 0,
+    references: trust.reference_count ?? 0,
+    pageViews: trust.page_views ?? 0, // the last 30 days
+    daysSinceUpdate: Number.isNaN(updated) ? null : Math.max(0, (Date.now() - updated) / 86400e3),
+    trending: Boolean(trending.read || trending.edited || trending.read_and_edited),
+    link: signals.essential?.link || articleUrl(page.title), // keeps the API's wprov, so the visit is credited
     thumbnail: page.thumbnail?.source || null,
   };
   cache.set(key, article);

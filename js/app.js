@@ -1,19 +1,60 @@
-import { SLOTS, NOTES, paint } from './painting.js';
-import { KEYS as KEY_NAMES, SCALES, OCTAVE_SHIFTS, DEFAULT_KEY, DEFAULT_SCALE, notesFor, rootOctave, keySlug, keyFromSlug, scaleById } from './scales.js';
+import { SLOTS, COLOURS, paint, gridFor, shapeAt } from './painting.js';
+import { KEYS as KEY_NAMES, MOODS, OCTAVE_SHIFTS, DEFAULT_KEY, DEFAULT_MOOD, tonesFor, octaveAllowed, nearestOctave, keySlug, keyFromSlug, moodById } from './scales.js';
+import { knob } from './knob.js';
+import { infinity } from './infinity.js';
 import { Synth, SoundMap, soundOf } from './synth.js';
 import { articleSignals, search, articleUrl, SURPRISES, STARTER } from './wiki.js';
 
 const LABELS = { waveform: 'Waveform', filter: 'Filter', envelope: 'Envelope', effect: 'Effect' };
 const HINTS = {
-  waveform: 'The article’s topic picks the tone. Science and technology are square, culture is sawtooth, geography is triangle, history and society are sine.',
-  filter: 'The more pages link to the article, the brighter the sound.',
-  envelope: 'The older the article, the longer each note rings.',
-  effect: 'The more it’s been edited this month, the more the note wobbles.',
+  waveform: 'The more people have written the article, the richer the tone.',
+  filter: 'The more references the article cites, the brighter the sound.',
+  envelope: 'The more people read the article, the longer each note rings.',
+  effect: 'The more recently the article was updated, the more the note wobbles. A trending article shimmers.',
 };
+
+/** Codex icons (@wikimedia/codex-icons), one for each slot's trust signal, and one for trending. */
+const icon = (paths, size = 'small') =>
+  `<span class="cdx-icon cdx-icon--${size}"><svg viewBox="0 0 20 20" aria-hidden="true">${paths}</svg></span>`;
+const SIGNAL_ICONS = {
+  // cdxIconUserAvatar: contributors
+  waveform: icon('<path d="M12 11a6 6 0 016 6v2H2v-2a6 6 0 016-6z"/><circle cx="10" cy="5" r="4"/>'),
+  // cdxIconReferences: references
+  filter: icon('<path d="M7 1v18H1V1zM3 17h2V3H3z"/><path d="M11 1v18H5V1zM7 17h2V3H7z"/><path d="M6 12v2H2v-2zm4 0v2H6v-2zM14.37.075l4.66 17.387-5.796 1.553L8.575 1.628 14.371.075Zm.278 16.49 1.932-.517-3.623-13.523-1.932.517z"/><path d="m16.252 10.96.518 1.931-3.864 1.035-.518-1.931z"/>'),
+  // cdxIconChart: page views
+  envelope: icon('<path d="M3 17h16v2H1V1h2z"/><path d="M19 5v10H5v-1l4.5-5.5 3 3.5L18 5z"/>'),
+  // cdxIconCalendar: last updated
+  effect: icon('<path d="M10 14H7v-3h3z"/><path d="M7 3h6V1h2v2h5v15H0V3h5V1h2zM2 16h16V8H2z"/>'),
+};
+// cdxIconArrowUp: trending (Chart is page views)
+const TRENDING_ICON = icon('<path d="M16.414 7.71 15 9.124l-4-4V19H9V5.124l-4 4L3.586 7.71l5.707-5.707h1.414z"/>', 'x-small');
+
+/**
+ * A Codex Thumbnail: the image when there is one, otherwise Codex's
+ * placeholder (cdxIconImage). [setThumbnail] swaps between them.
+ */
+const THUMBNAIL = `<span class="cdx-thumbnail__placeholder"><span class="cdx-icon cdx-icon--medium cdx-thumbnail__placeholder__icon--vue"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15 15H5l3.5-4 2 2L15 8z"/><path d="M19 19H1V1h18zM3 17h14V3H3z"/><circle cx="6.5" cy="6.5" r="1.5"/></svg></span></span><span class="cdx-thumbnail__image" hidden></span>`;
+function setThumbnail(thumbnail, src) {
+  const image = thumbnail.querySelector('.cdx-thumbnail__image');
+  const url = src ? `url("${src.replace(/"/g, '%22')}")` : '';
+  if (image.style.backgroundImage !== url) image.style.backgroundImage = url;
+  image.hidden = !src;
+  thumbnail.querySelector('.cdx-thumbnail__placeholder').hidden = Boolean(src);
+}
 /** The hash keys a shared link uses for each slot. */
 const HASH_KEYS = { waveform: 'w', filter: 'f', envelope: 'e', effect: 'x' };
-/** Keys A–L play the notes, lowest to highest. */
-const KEYS = ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK', 'KeyL'];
+/**
+ * The keyboard's left side plays all sixteen notes, one row per size: Z–V the
+ * large blocks, A–F medium, Q–R small, 1–4 the squares. Each column is a
+ * colour: yellow, red, blue, grey. Higher rows play higher.
+ */
+const KEY_ROWS = [
+  ['KeyZ', 'KeyX', 'KeyC', 'KeyV'],
+  ['KeyA', 'KeyS', 'KeyD', 'KeyF'],
+  ['KeyQ', 'KeyW', 'KeyE', 'KeyR'],
+  ['Digit1', 'Digit2', 'Digit3', 'Digit4'],
+];
+const KEY_NOTES = new Map(KEY_ROWS.flatMap((row, register) => row.map((code, c) => [code, { register, colour: COLOURS[c] }])));
 
 const $ = (id) => document.getElementById(id);
 const synth = new Synth();
@@ -24,9 +65,9 @@ const state = {
   loading: new Set(),
   failed: new Set(),
   key: DEFAULT_KEY, // 0–11, C to B
-  scale: DEFAULT_SCALE,
+  mood: DEFAULT_MOOD,
   shift: 0, // octaves up or down from where the key starts
-  notes: notesFor(DEFAULT_KEY, DEFAULT_SCALE), // what each rectangle plays, by index
+  tones: tonesFor(DEFAULT_KEY, DEFAULT_MOOD), // [register][colour]: the MIDI note each size and colour plays
 };
 
 const titleList = () => SLOTS.map((s) => state.titles[s]);
@@ -43,49 +84,66 @@ function titlesFromHash() {
 function writeHash() {
   const params = new URLSearchParams();
   SLOTS.forEach((s) => params.set(HASH_KEYS[s], state.titles[s]));
-  // The key and scale only go in the link when they're not the default.
-  if (state.key !== DEFAULT_KEY || state.scale !== DEFAULT_SCALE) {
+  // The pitch and mood only go in the link when they're not the default.
+  if (state.key !== DEFAULT_KEY || state.mood !== DEFAULT_MOOD) {
     params.set('k', keySlug(state.key));
-    params.set('s', state.scale);
+    params.set('m', state.mood);
   }
   if (state.shift) params.set('o', String(state.shift));
   history.replaceState(null, '', `#${params.toString().replace(/\+/g, '%20')}`);
 }
 
-/** The key and scale in the link, or the default. */
+/** The pitch, mood and octave in the link, or the default. */
 function tuningFromHash() {
   const params = new URLSearchParams(location.hash.slice(1));
   const key = keyFromSlug(params.get('k'));
-  const scale = scaleById(params.get('s'))?.id;
+  const mood = moodById(params.get('m'))?.id;
   const shift = Number(params.get('o'));
-  return { key: key ?? DEFAULT_KEY, scale: scale ?? DEFAULT_SCALE, shift: OCTAVE_SHIFTS.includes(shift) ? shift : 0 };
+  const k = key ?? DEFAULT_KEY;
+  return { key: k, mood: mood ?? DEFAULT_MOOD, shift: octaveAllowed(k, shift) ? shift : 0 };
 }
 
-function setTuning({ key, scale, shift }) {
+function setTuning({ key, mood, shift }) {
   state.key = key;
-  state.scale = scale;
+  state.mood = mood;
   state.shift = shift;
-  state.notes = notesFor(key, scale, shift);
-  $('key').value = String(key);
-  $('scale').value = scale;
-  // The octave is named by the note the instrument starts on: A2, A3, A4…
-  $('octave').textContent = `${KEY_NAMES[key]}${rootOctave(key, shift)}`;
-  $('octave-down').disabled = shift <= OCTAVE_SHIFTS[0];
-  $('octave-up').disabled = shift >= OCTAVE_SHIFTS[OCTAVE_SHIFTS.length - 1];
+  state.tones = tonesFor(key, mood, shift);
+  knobs.pitch?.set(key);
+  knobs.mood?.set(MOODS.findIndex((m) => m.id === mood));
+  // Only as far as every note stays audible: no lower than C1, no higher than C8.
+  const reachable = OCTAVE_SHIFTS.filter((s) => octaveAllowed(key, s));
+  $('octave').textContent = `Octave ${reachable.indexOf(shift) + 1} of ${reachable.length}`;
+  $('octave-down').disabled = !octaveAllowed(key, shift - 1);
+  $('octave-up').disabled = !octaveAllowed(key, shift + 1);
+  // The octave shows in the buttons' sizes: the higher it goes, the smaller
+  // the − button gets, and the lower, the smaller the +, one Codex button
+  // size for each octave away from the middle.
+  sizeButton($('octave-down'), shift);
+  sizeButton($('octave-up'), -shift);
   updateReset();
+}
+
+const BUTTON_SIZES = ['large', 'medium', 'small'];
+/** A Codex button at the size [steps] down from large (0 or less: large), its icon to match. */
+function sizeButton(button, steps) {
+  const size = BUTTON_SIZES[Math.max(0, Math.min(BUTTON_SIZES.length - 1, steps))];
+  BUTTON_SIZES.forEach((s) => button.classList.toggle(`cdx-button--size-${s}`, s === size));
+  const icon = button.querySelector('.cdx-icon');
+  icon.classList.toggle('cdx-icon--medium', size !== 'small');
+  icon.classList.toggle('cdx-icon--small', size === 'small');
 }
 
 /** Load four articles at once (a whole new painting). */
 /** True when the instrument is the starter patch in the default tuning. */
 const isDefault = () =>
-  sameTitles(titleList(), STARTER) && state.key === DEFAULT_KEY && state.scale === DEFAULT_SCALE && state.shift === 0;
+  sameTitles(titleList(), STARTER) && state.key === DEFAULT_KEY && state.mood === DEFAULT_MOOD && state.shift === 0;
 
 const updateReset = () => ($('reset').disabled = isDefault());
 
-/** Back to the starter articles (each slot's own article) and C major pentatonic, octave 4. */
+/** Back to the starter articles (each slot's own article), pitch C, Sunny, the middle octave. */
 function reset() {
   if (isDefault()) return;
-  setTuning({ key: DEFAULT_KEY, scale: DEFAULT_SCALE, shift: 0 });
+  setTuning({ key: DEFAULT_KEY, mood: DEFAULT_MOOD, shift: 0 });
   usePatch(STARTER);
   toast('Back to the default sound');
 }
@@ -145,14 +203,15 @@ function pickSurprise() {
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
 /**
- * The die: four surprise articles and a random key, scale and octave. The
+ * The die: four surprise articles and a random pitch, mood and octave. The
  * octave stays within one of the middle so the notes never go thin or muddy.
  */
 let rolls = 0;
 async function newSound() {
   const roll = ++rolls;
   synth.wake(); // while the click still counts as the user's gesture
-  setTuning({ key: Math.floor(Math.random() * 12), scale: pick(SCALES).id, shift: pick([-1, 0, 1]) });
+  const key = Math.floor(Math.random() * 12);
+  setTuning({ key, mood: pick(MOODS).id, shift: nearestOctave(key, pick([-1, 0, 1])) });
   writeHash();
   await surprise();
   // Once the new articles have shaped the sound, play it (unless the die was rolled again).
@@ -165,10 +224,7 @@ function surprise(slots = SLOTS) {
 
 // ---------- Rendering ----------
 
-let blocks = [];
-
-/** Width of the lines between rectangles: the same --rule as the card and input borders. */
-const lineWidth = (svg) => parseFloat(getComputedStyle(svg).getPropertyValue('--rule')) || 2;
+let painting = null; // { cols, rows, shapes } in grid units
 
 function render() {
   updateReset();
@@ -185,87 +241,88 @@ function svgEl(name, attrs = {}) {
   return el;
 }
 
-/** Builds the nine (block + flash) pairs once; later renders only move them. */
-function paintingSkeleton(svg) {
-  svg.replaceChildren();
-  const group = svgEl('g');
-  NOTES.forEach(() => group.append(svgEl('rect', { class: 'block' }), svgEl('rect', { class: 'flash' })));
-  svg.append(group);
-  return group;
-}
+/** Pixels per grid square, across and down: the grid fills the whole SVG, edge to edge. */
+let cell = { w: 1, h: 1 };
+let shapeEls = [];
+let paintedFor = '';
 
 /**
- * Stretches the unit-square painting over the whole SVG, in its own pixels.
- * Lines run only between rectangles: the outer ones reach the edge of the window.
+ * Draws the painting over the whole SVG, in its own pixels. Redrawn only when
+ * the articles or the number of squares change; a resize that keeps the grid
+ * just moves the shapes.
  */
-function layoutPainting(svg, group, painted) {
+function renderPainting() {
+  const svg = $('painting');
   const { width: W, height: H } = svg.getBoundingClientRect();
+  if (!W || !H) return;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  const half = lineWidth(svg) / 2;
-  const inset = (v) => (v <= 0.0001 || v >= 0.9999 ? 0 : half);
-  const rects = group.querySelectorAll('.block');
-  const flashes = group.querySelectorAll('.flash');
-  painted.forEach((b, i) => {
-    const x = b.l * W + inset(b.l);
-    const y = b.t * H + inset(b.t);
-    const geometry = {
-      x,
-      y,
-      width: Math.max(0, b.r * W - inset(b.r) - x),
-      height: Math.max(0, b.b * H - inset(b.b) - y),
-    };
-    // As CSS properties too, so changes animate where the browser supports it.
-    for (const el of [rects[i], flashes[i]]) {
-      Object.entries(geometry).forEach(([k, v]) => {
-        el.setAttribute(k, v.toFixed(1));
-        el.style[k] = `${v.toFixed(1)}px`;
-      });
-    }
-    rects[i].dataset.paint = b.paint;
-    rects[i].dataset.note = b.note;
+  const { cols, rows } = gridFor(W, H);
+  cell = { w: W / cols, h: H / rows };
+  const key = `${titleList().join('|')}#${cols}x${rows}`;
+  if (key !== paintedFor) {
+    paintedFor = key;
+    painting = paint(titleList(), cols, rows);
+    const group = svgEl('g');
+    shapeEls = painting.shapes.map((shape) => {
+      const el = svgEl('rect', { class: `shape ${shape.kind}`, 'data-paint': shape.colour });
+      group.append(el);
+      return el;
+    });
+    svg.replaceChildren(group);
+  }
+  painting.shapes.forEach((shape, i) => {
+    const el = shapeEls[i];
+    el.setAttribute('x', (shape.col * cell.w).toFixed(2));
+    el.setAttribute('y', (shape.row * cell.h).toFixed(2));
+    el.setAttribute('width', (shape.w * cell.w).toFixed(2));
+    el.setAttribute('height', (shape.h * cell.h).toFixed(2));
   });
 }
 
-let paintingGroup = null;
-function renderPainting() {
-  const svg = $('painting');
-  if (!paintingGroup) {
-    paintingGroup = paintingSkeleton(svg);
-    // Follow the window: resizing redraws at once, without the change animation.
-    let settle;
-    new ResizeObserver(() => {
-      svg.classList.add('resizing');
-      layoutPainting(svg, paintingGroup, blocks);
-      clearTimeout(settle);
-      settle = setTimeout(() => svg.classList.remove('resizing'), 150);
-    }).observe(svg);
-  }
-  blocks = paint(titleList());
-  layoutPainting(svg, paintingGroup, blocks);
+let watchingSize = false;
+function watchPaintingSize() {
+  if (watchingSize) return;
+  watchingSize = true;
+  new ResizeObserver(() => renderPainting()).observe($('painting'));
 }
 
+const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+const plural = (n, one, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+
+/** How long ago, in words: today, 3 days ago, 2 months ago, 4 years ago. */
+function ago(days) {
+  if (days === null) return 'a while ago';
+  if (days < 1) return 'today';
+  if (days < 2) return 'yesterday';
+  if (days < 60) return `${Math.floor(days)} days ago`;
+  if (days < 730) return `${Math.floor(days / 30.4)} months ago`;
+  return `${Math.floor(days / 365.25)} years ago`;
+}
+
+/**
+ * A slot's trust signal and what it does to the sound, naming the slot:
+ * { signal, sound }, e.g. '3 references' and 'muffled filter'.
+ */
 function readout(slot, a) {
-  const n = (x) => x.toLocaleString();
   switch (slot) {
     case 'waveform': {
-      const topic = { STEM: 'Science', Culture: 'Culture', Geography: 'Geography', History_and_Society: 'History' }[a.topic] || 'No topic';
-      return `${topic}, ${SoundMap.waveform(a.topic)}`;
+      const tone = { sine: 'pure', triangle: 'soft', square: 'hollow', sawtooth: 'rich' }[SoundMap.waveform(a.contributors)];
+      return { signal: plural(a.contributors, 'contributor'), sound: `${tone} waveform` };
     }
     case 'filter': {
-      const cutoff = SoundMap.cutoff(a.incomingLinks);
+      const cutoff = SoundMap.cutoff(a.references);
       const feel = cutoff < 800 ? 'muffled' : cutoff < 2500 ? 'warm' : cutoff < 5000 ? 'bright' : 'brilliant';
-      return `${n(a.incomingLinks)} links, ${feel}`;
+      return { signal: plural(a.references, 'reference'), sound: `${feel} filter` };
     }
     case 'envelope': {
-      const decay = SoundMap.decay(a.ageYears);
-      const feel = decay < 0.45 ? 'short pluck' : decay < 1.2 ? 'medium ring' : 'long ring';
-      return `${a.createdYear ? `Since ${a.createdYear}` : 'Age unknown'}, ${feel}`;
+      const decay = SoundMap.decay(a.pageViews);
+      const feel = decay < 0.45 ? 'short' : decay < 1.2 ? 'medium' : 'long';
+      return { signal: `${compact.format(a.pageViews)} ${a.pageViews === 1 ? 'view' : 'views'} this month`, sound: `${feel} envelope` };
     }
     case 'effect': {
-      const depth = SoundMap.vibratoDepth(a.editsLastMonth);
-      const feel = depth < 1 ? 'steady' : depth < 15 ? 'light wobble' : depth < 30 ? 'wobble' : 'lots of wobble';
-      const edits = a.editsLastMonth >= 50 ? '50+' : n(a.editsLastMonth);
-      return `${edits} ${a.editsLastMonth === 1 ? 'edit' : 'edits'} this month, ${feel}`;
+      const depth = SoundMap.vibratoDepth(a.daysSinceUpdate, a.trending);
+      const feel = a.trending ? 'shimmer' : depth < 1 ? 'steady' : depth < 15 ? 'light wobble' : depth < 30 ? 'wobble' : 'big wobble';
+      return { signal: `Updated ${ago(a.daysSinceUpdate)}`, sound: `${feel} effect` };
     }
   }
 }
@@ -274,45 +331,59 @@ function renderSlots() {
   const container = $('slots');
   if (!container.children.length) {
     SLOTS.forEach((slot) => {
+      // A Codex Card (a link card, as it opens the picker): thumbnail, the
+      // article as its title, the trust signal and the slot's sound as
+      // supporting text, and a Codex Info Chip when the effect is trending.
+      // Two lines, so the slot is named in the sound ('muffled filter').
       const card = document.createElement('button');
-      card.className = 'slot';
+      card.type = 'button';
+      card.className = 'cdx-card cdx-card--is-link slot';
       card.dataset.slot = slot;
       card.innerHTML = `
-        <span class="slot-label">${LABELS[slot]}</span>
-        <span class="slot-title"></span>
-        <span class="slot-readout"></span>
-        <img class="thumb" alt="">`;
+        <span class="cdx-card__thumbnail cdx-thumbnail">${THUMBNAIL}</span>
+        <span class="cdx-card__text">
+          <span class="cdx-card__text__title slot-title"></span>
+          <span class="cdx-card__text__supporting-text slot-signal">${SIGNAL_ICONS[slot]}<span class="slot-readout"></span></span>
+        </span>
+        <span class="cdx-info-chip cdx-info-chip--warning slot-trend" hidden>${TRENDING_ICON}<span class="cdx-info-chip__text">Trending</span></span>`;
       card.addEventListener('click', () => openPicker(slot));
       container.append(card);
     });
   }
   SLOTS.forEach((slot) => {
     const card = container.querySelector(`[data-slot="${slot}"]`);
-    const article = state.articles[slot];
+    const loaded = state.articles[slot]?.title === state.titles[slot] ? state.articles[slot] : null;
     const loading = state.loading.has(slot);
     card.classList.toggle('loading', loading);
-    const thumb = card.querySelector('.thumb');
-    const src = article && article.title === state.titles[slot] ? article.thumbnail : null;
-    if (src) { if (thumb.getAttribute('src') !== src) thumb.src = src; } else thumb.removeAttribute('src');
+    setThumbnail(card.querySelector('.cdx-thumbnail'), loaded?.thumbnail);
     card.querySelector('.slot-title').textContent = state.titles[slot] || '…';
-    card.querySelector('.slot-readout').textContent = state.failed.has(slot)
-      ? 'Couldn’t load. Tap to choose again.'
-      : article && article.title === state.titles[slot]
-        ? readout(slot, article)
-        : 'Reading the article…';
-    const label = card.querySelector('.slot-label');
-    label.querySelector('.spinner')?.remove();
-    if (loading) label.append(Object.assign(document.createElement('span'), { className: 'spinner' }));
-    card.setAttribute('aria-label', `${LABELS[slot]}: ${state.titles[slot]}. ${card.querySelector('.slot-readout').textContent} Change article.`);
+    let text = 'Reading the article…';
+    if (state.failed.has(slot)) text = 'Couldn’t load. Tap to choose again.';
+    else if (loaded) {
+      const { signal, sound } = readout(slot, loaded);
+      text = `${signal} · ${sound}`;
+    }
+    card.querySelector('.slot-readout').textContent = text;
+    // Trending only matters to the effect, so only its card shows it.
+    const trending = slot === 'effect' && Boolean(loaded?.trending);
+    card.querySelector('.slot-trend').hidden = !trending;
+    // While loading, a spinner stands in for the signal's icon.
+    const line = card.querySelector('.slot-signal');
+    line.querySelector('.spinner')?.remove();
+    line.querySelector('.cdx-icon').hidden = loading;
+    if (loading) line.prepend(Object.assign(document.createElement('span'), { className: 'spinner' }));
+    card.setAttribute('aria-label', `${LABELS[slot]}: ${state.titles[slot]}. ${text}${trending ? ', trending' : ''}. Change article.`);
   });
 }
 
 function renderCredits() {
   const links = SLOTS.map((s) => {
     const title = state.titles[s] || '';
-    return `<a href="${articleUrl(title)}" target="_blank" rel="noopener">${escapeHtml(title)}</a>`;
+    // The Attribution API's link keeps its wprov tag, so Wikipedia can count the visit.
+    const loaded = state.articles[s]?.title === title ? state.articles[s] : null;
+    return `<a href="${loaded?.link || articleUrl(title)}" target="_blank" rel="noopener">${escapeHtml(title)}</a>`;
   });
-  $('credits').innerHTML = `This instrument is made from the Wikipedia articles ${links.slice(0, 3).join(', ')} and ${links[3]}. Article data from Wikipedia, available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>.`;
+  $('credits').innerHTML = `This instrument is made from the Wikipedia articles ${links.slice(0, 3).join(', ')} and ${links[3]}. Article data from Wikipedia, available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>. The painting is inspired by <a href="https://en.wikipedia.org/wiki/Broadway_Boogie_Woogie" target="_blank" rel="noopener"><i>Broadway Boogie Woogie</i></a> by <a href="https://en.wikipedia.org/wiki/Piet_Mondrian" target="_blank" rel="noopener">Piet Mondrian</a>.`;
 }
 
 function escapeHtml(text) {
@@ -321,29 +392,60 @@ function escapeHtml(text) {
 
 // ---------- Playing ----------
 
-function strike(index) {
-  const block = blocks[index];
-  if (!block) return;
-  synth.strike(state.notes[index]);
-  const flash = paintingGroup.querySelectorAll('.flash')[index];
-  flash.animate([{ opacity: 0.5 }, { opacity: 0 }], { duration: 320, easing: 'ease-out' });
+/** The note a shape plays: its colour's tone, in its size's octave. */
+const noteOf = (shape) => state.tones[shape.register][COLOURS.indexOf(shape.colour)];
+
+/** Plays one shape, pressing just that shape. */
+function strike(shape) {
+  synth.strike(noteOf(shape));
+  press([shape]);
 }
 
-function blockAt(event) {
+/** Plays a note by size and colour, pressing every shape that plays it. */
+function strikeNote({ register, colour }) {
+  if (!painting) return;
+  synth.strike(state.tones[register][COLOURS.indexOf(colour)]);
+  press(painting.shapes.filter((s) => s.colour === colour && s.register === register));
+}
+
+// A struck shape shrinks toward its centre for a moment, like a button pushed
+// in, then springs back. Every shape moves in by the same number of pixels on
+// each side, a fifth of a square, so all of them show the same gap.
+const PRESS_MS = 110;
+const PRESS_GAP = 0.2; // of a square
+const pressTimers = new Map();
+function press(shapes) {
+  const gap = PRESS_GAP * Math.min(cell.w, cell.h);
+  shapes.forEach((shape) => {
+    const el = shapeEls[shape.id];
+    const w = shape.w * cell.w;
+    const h = shape.h * cell.h;
+    clearTimeout(pressTimers.get(el));
+    el.classList.add('pressing');
+    el.style.transform = `scale(${(w - 2 * gap) / w}, ${(h - 2 * gap) / h})`;
+    pressTimers.set(el, setTimeout(() => {
+      el.classList.remove('pressing');
+      el.style.transform = '';
+      pressTimers.delete(el);
+    }, PRESS_MS));
+  });
+}
+
+function shapeUnder(event) {
+  if (!painting) return null;
   const box = $('painting').getBoundingClientRect();
-  const x = (event.clientX - box.left) / box.width;
-  const y = (event.clientY - box.top) / box.height;
-  return blocks.find((b) => x >= b.l && x <= b.r && y >= b.t && y <= b.b);
+  return shapeAt(painting, (event.clientX - box.left) / cell.w, (event.clientY - box.top) / cell.h);
 }
 
-// Every finger (or the mouse) plays on its own: a note when it lands, then each new rectangle it slides into.
+// Every finger (or the mouse) plays on its own: a note when it lands, then one
+// for each new shape it slides onto, so dragging along a street plays a run.
 const pointers = new Map();
 function touch(event) {
-  const block = blockAt(event);
-  const index = block ? block.index : -1;
-  if (pointers.get(event.pointerId) === index) return;
-  pointers.set(event.pointerId, index);
-  if (block) strike(index);
+  const shape = shapeUnder(event);
+  const id = shape ? shape.id : -1;
+  if (pointers.get(event.pointerId) === id) return;
+  pointers.set(event.pointerId, id);
+  if (shape) strike(shape);
 }
 
 function setUpPlaying() {
@@ -370,11 +472,11 @@ function setUpPlaying() {
       $(octave).click(); // does nothing at the limit, where the button is disabled
       return;
     }
-    const index = KEYS.indexOf(e.code);
-    if (index < 0) return;
+    const note = KEY_NOTES.get(e.code);
+    if (!note) return;
     e.preventDefault();
     synth.wake();
-    strike(index);
+    strikeNote(note);
   });
 }
 
@@ -406,15 +508,27 @@ function showResults(results, text) {
     list.innerHTML = `<li class="empty">No articles start with “${escapeHtml(text)}”.</li>`;
     return;
   }
+  // Codex Menu Items, each with a thumbnail and description. Codex's menu
+  // highlights the item under the pointer or focus; so do we.
   results.forEach((r) => {
     const li = document.createElement('li');
+    li.className = 'cdx-menu-item cdx-menu-item--enabled cdx-menu-item--has-description';
     const button = document.createElement('button');
     button.type = 'button';
-    button.innerHTML = `<img class="thumb" alt="" loading="lazy"><span class="text"><span class="title"></span><span class="description"></span></span>`;
-    if (r.thumbnail) button.querySelector('.thumb').src = r.thumbnail;
-    button.querySelector('.title').textContent = r.title;
-    button.querySelector('.description').textContent = r.description;
+    button.className = 'cdx-menu-item__content';
+    button.innerHTML = `<span class="cdx-thumbnail cdx-menu-item__thumbnail">${THUMBNAIL}</span>
+      <span class="cdx-menu-item__text"><span class="cdx-menu-item__text__label"><bdi></bdi></span><span class="cdx-menu-item__text__description"><bdi></bdi></span></span>`;
+    setThumbnail(button.querySelector('.cdx-thumbnail'), r.thumbnail);
+    button.querySelector('.cdx-menu-item__text__label bdi').textContent = r.title;
+    button.querySelector('.cdx-menu-item__text__description bdi').textContent = r.description;
     button.addEventListener('click', () => choose(r.title));
+    const highlight = (on) => li.classList.toggle('cdx-menu-item--highlighted', on);
+    button.addEventListener('pointerenter', () => highlight(true));
+    button.addEventListener('pointerleave', () => highlight(document.activeElement === button));
+    button.addEventListener('focus', () => highlight(true));
+    button.addEventListener('blur', () => highlight(false));
+    button.addEventListener('pointerdown', () => li.classList.add('cdx-menu-item--active'));
+    button.addEventListener('pointerup', () => li.classList.remove('cdx-menu-item--active'));
     li.append(button);
     list.append(li);
   });
@@ -439,7 +553,7 @@ function setUpPicker() {
   input.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const first = $('picker-results').querySelector('.title');
+    const first = $('picker-results').querySelector('.cdx-menu-item__text__label');
     choose(first ? first.textContent : input.value.trim());
   });
   $('picker-surprise').addEventListener('click', () => {
@@ -448,26 +562,54 @@ function setUpPicker() {
   });
 }
 
-// ---------- Key and scale
+// ---------- Pitch, mood and octave ----------
 
-/** Lets a new sound be heard: a quick run up the first five notes. */
+/** Lets a new sound be heard: a quick climb from the large blocks to the squares. */
+const PREVIEW = [[0, 'yellow'], [1, 'yellow'], [2, 'red'], [2, 'blue'], [3, 'yellow']];
 function preview() {
-  [0, 1, 2, 3, 4].forEach((i) => setTimeout(() => strike(i), i * 110));
+  PREVIEW.forEach(([register, colour], i) => setTimeout(() => strikeNote({ register, colour }), i * 110));
 }
 
+/** The squares' four colours in turn, quickly: how a mood sounds. */
+function strum() {
+  COLOURS.forEach((colour, i) => setTimeout(() => strikeNote({ register: 3, colour }), i * 45));
+}
+
+const knobs = {};
+
 function setUpTuning() {
-  KEY_NAMES.forEach((name, i) => $('key').append(new Option(name, String(i))));
-  SCALES.forEach((scale) => $('scale').append(new Option(scale.name, scale.id)));
-  const change = (shift = state.shift) => {
-    setTuning({ key: Number($('key').value), scale: $('scale').value, shift });
+  const retune = (changes) => {
+    const tuning = { key: state.key, mood: state.mood, shift: state.shift, ...changes };
+    // A new pitch may not reach as far: keep the octave as near as still sounds.
+    setTuning({ ...tuning, shift: nearestOctave(tuning.key, tuning.shift) });
     writeHash();
     synth.wake();
+  };
+  // Each notch of Pitch (round its infinity track) plays its home note on every
+  // yellow square; each notch of Mood strums its four colours.
+  knobs.pitch = infinity($('pitch'), {
+    count: 12,
+    label: (i) => KEY_NAMES[i],
+    onTurn: (key) => {
+      retune({ key });
+      strikeNote({ register: 3, colour: 'yellow' });
+    },
+  });
+  knobs.mood = knob($('mood'), {
+    count: MOODS.length,
+    textPointer: true, // the mood's name is the knob's pointer
+    label: (i) => MOODS[i].name,
+    onTurn: (i) => {
+      retune({ mood: MOODS[i].id });
+      strum();
+    },
+  });
+  const octave = (step) => {
+    retune({ shift: state.shift + step });
     preview();
   };
-  $('key').addEventListener('change', () => change());
-  $('scale').addEventListener('change', () => change());
-  $('octave-down').addEventListener('click', () => change(state.shift - 1));
-  $('octave-up').addEventListener('click', () => change(state.shift + 1));
+  $('octave-down').addEventListener('click', () => octave(-1));
+  $('octave-up').addEventListener('click', () => octave(1));
 }
 
 // ---------- Sharing ----------
@@ -488,7 +630,7 @@ async function share() {
 let toastTimer = 0;
 function toast(message) {
   const el = $('toast');
-  el.textContent = message;
+  $('toast-text').textContent = message;
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
@@ -497,6 +639,7 @@ function toast(message) {
 // ---------- Start ----------
 
 function start() {
+  watchPaintingSize();
   setUpPlaying();
   setUpPicker();
   setUpTuning();

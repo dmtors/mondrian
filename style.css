@@ -1,30 +1,26 @@
+/*
+ * Mondrian's styles, on Codex: the design tokens and component styles come
+ * from vendor/codex/ (Codex with change 1304941 applied), loaded before this
+ * file. Components wear Codex classes in the markup (cdx-button, cdx-card,
+ * cdx-thumbnail, cdx-label, cdx-dialog, cdx-text-input, cdx-menu-item,
+ * cdx-info-chip, cdx-message); this file adds layout and only the deltas, in
+ * Codex tokens, so a different Codex shows through without edits here.
+ *
+ * The one palette of our own is the painting's: Mondrian's red, blue, yellow
+ * and grey. They are the artwork, not interface colours. Its white ground is
+ * Codex's base background, so it follows light and dark.
+ */
+
 :root {
-  --paper: #fff;
-  --surface: #fff;
-  --ink: #141414;
-  --muted: #141414;
-  --line: #141414;
-  --block-white: #fff;
-  --red: #ff2b00;
-  --blue: #1d5ee0;
-  --yellow: #f5bb1b;
-  --focus: #1d5ee0;
-  --rule: 1px;
-  --radius: 0;
+  --paint-red: #ff2b00;
+  --paint-blue: #1d5ee0;
+  --paint-yellow: #f5bb1b;
+  --paint-grey: #ede8dc;
   color-scheme: light;
 }
-
-/* On a dark screen the black lines would vanish, so lines and black blocks turn
-   to the paper colour and white blocks to near-black; red, blue and yellow stay. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #121212;
-    --surface: #1b1b1b;
-    --ink: #ede8dc;
-    --muted: #a8a399;
-    --line: #ede8dc;
-    --block-white: #242424;
-    --focus: #6f9bff;
+    --paint-grey: #6e6e6a;
     color-scheme: dark;
   }
 }
@@ -33,24 +29,63 @@
 
 html, body { margin: 0; }
 
+/* Body text: Codex's Body style. */
 body {
-  min-height: 100dvh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--paper);
-  color: var(--ink);
-  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
+  background-color: var(--background-color-base);
+  color: var(--color-base);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-medium);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-medium);
 }
 
-button { font: inherit; color: inherit; }
+/* Codex's typography: every element one of its text styles (see the codex-typography rules). */
+h1 {
+  margin: 0;
+  font-family: var(--font-family-serif);
+  font-size: var(--font-size-x-large);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-x-large);
+  text-transform: uppercase;
+  letter-spacing: 0.1rem;
+}
+h2 {
+  margin: 0;
+  font-family: var(--font-family-serif);
+  font-size: var(--font-size-xx-large);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-xx-large);
+}
+p { margin: 0; }
+small {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-small);
+}
+a { color: var(--color-progressive); }
+a:hover { color: var(--color-progressive--hover); }
+a:active { color: var(--color-progressive--active); }
+a:visited { color: var(--color-visited); }
 
-:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Custom controls (the painting's sliders) take Codex's focus outline. */
+:focus-visible { outline: var(--border-width-thick) var(--border-style-base) var(--outline-color-progressive--focus); outline-offset: var(--spacing-12); }
+.cdx-button:focus-visible, .cdx-card:focus-visible, .cdx-text-input__input:focus-visible, .cdx-menu-item__content:focus-visible { outline: none; } /* Codex draws its own */
+
+.visually-hidden {
+  position: absolute;
+  width: var(--size-absolute-1);
+  height: var(--size-absolute-1);
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 
 /* Page: the painting fills the left half, edge to edge; the title and
    controls fill the right. On narrow screens the painting sits on top. */
-
-body { height: 100dvh; }
 
 .page {
   flex: 1;
@@ -62,7 +97,7 @@ body { height: 100dvh; }
 .instrument {
   position: relative;
   min-height: 0;
-  background: var(--line);
+  background-color: var(--background-color-base);
 }
 
 #painting {
@@ -78,350 +113,301 @@ body { height: 100dvh; }
 }
 
 .panel {
-  border-left: var(--rule) solid var(--line); /* the painting's line, between the halves */
+  border-left: var(--border-width-base) var(--border-style-base) var(--border-color-subtle); /* between the halves */
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 40px max(48px, env(safe-area-inset-right)) 24px 48px;
+  gap: var(--spacing-125);
+  padding: var(--spacing-250) max(var(--spacing-300), env(safe-area-inset-right)) var(--spacing-150) var(--spacing-300);
+  container: panel / inline-size; /* the deck lays out by the panel's width, not the window's */
 }
 .panel > * { width: 100%; }
 
-/* Title, then description, then the icon buttons: one row each. */
-.bar {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 16px;
-  margin: 0 0 8px; /* with the credits' auto margin, centres the controls */
-}
+/* The title with the icon buttons on its row, then the description. */
+.bar { display: flex; flex-direction: column; gap: var(--spacing-25); }
+.title-row { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-75); }
+.tagline { color: var(--color-subtle); }
+/* Quiet icon buttons: nudged so the last glyph lines up with the panel's edge. */
+.actions { display: flex; gap: var(--spacing-25); margin-right: calc(-1 * var(--spacing-50)); }
 
-h1 {
-  margin: 0;
-  font-size: 44px;
-  line-height: 1;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-}
-
-.tagline { margin: 10px 0 0; color: var(--muted); font-size: 16px; }
-
-.actions { display: flex; gap: 4px; margin-left: -10px; /* icon glyphs line up with the text */ }
-
-button.icon {
-  display: inline-grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius);
-  background: transparent;
-  cursor: pointer;
-  font-size: 24px;
-  line-height: 1;
-}
-button.icon:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
-button.icon svg { width: 20px; height: 20px; fill: currentColor; }
-button.icon:disabled { opacity: 0.35; cursor: default; }
-
-.slots { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 10px; }
+/* The deck: the article cards, then the sound controls. With room, the
+   controls stack in a column to the right of the cards (the container
+   query after the tuning styles below). */
+.deck { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--spacing-75); align-items: start; }
+.slots { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--spacing-50); }
 
 @media (max-width: 820px) {
   body { height: auto; }
   .page { grid-template-columns: minmax(0, 1fr); }
   .instrument { height: min(100vw, 64dvh); }
-  .panel { border-left: 0; border-top: var(--rule) solid var(--line); overflow: visible; gap: 16px; padding: 20px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left)); }
-  .bar { margin: 0; }
-  h1 { font-size: 30px; }
-  .tagline { margin-top: 6px; font-size: 14px; }
-  .slots { gap: 8px; }
-  .actions { margin-left: -8px; }
-  button.icon { width: 36px; height: 36px; }
+  .panel {
+    border-left: 0;
+    border-top: var(--border-width-base) var(--border-style-base) var(--border-color-subtle);
+    overflow: visible;
+    gap: var(--spacing-100);
+    padding: var(--spacing-125) max(var(--spacing-100), env(safe-area-inset-right)) var(--spacing-100) max(var(--spacing-100), env(safe-area-inset-left));
+  }
 }
 
-/* Tuning: key and octave side by side, scale below, in a card like the slots */
-
-.tuning {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px 12px;
-  padding: 10px 12px 12px;
-  background: var(--surface);
-  border: var(--rule) solid var(--line);
-  border-radius: var(--radius);
-}
-.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.field-wide { grid-column: 1 / -1; }
-.field-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.select { position: relative; display: flex; }
-.select select {
-  width: 100%;
-  height: 36px;
-  appearance: none;
-  -webkit-appearance: none;
-  padding: 0 32px 0 10px;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink);
-  background: var(--paper);
-  border: var(--rule) solid var(--line);
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-.select select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.select .chevron {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  width: 16px;
-  height: 16px;
-  transform: translateY(-50%);
-  fill: currentColor;
-  pointer-events: none;
-}
-
-.stepper {
-  display: flex;
-  align-items: stretch;
-  height: 36px;
-  background: var(--paper);
-  border: var(--rule) solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-.stepper button {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-}
-.stepper button:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 8%, transparent); }
-.stepper button:disabled { opacity: 0.3; cursor: default; }
-.stepper button:focus-visible { outline-offset: -3px; }
-.stepper svg { width: 16px; height: 16px; fill: currentColor; }
-.stepper output {
-  display: grid;
-  place-items: center;
-  min-width: 44px;
-  font-size: 15px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  border-inline: var(--rule) solid var(--line);
-}
-
-.hint { margin: 0; color: var(--muted); font-size: 13px; }
-kbd {
-  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  padding: 2px 5px;
-  border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-}
-@media (hover: none) { .hint kbd, .hint .keys { display: none; } }
-
-/* The painting */
-
-#painting.resizing .block, #painting.resizing .flash { transition: none; }
-.block {
-  transition: x 0.45s ease, y 0.45s ease, width 0.45s ease, height 0.45s ease, fill 0.3s ease;
-}
-.block[data-paint="white"] { fill: var(--block-white); }
-.block[data-paint="red"] { fill: var(--red); }
-.block[data-paint="blue"] { fill: var(--blue); }
-.block[data-paint="yellow"] { fill: var(--yellow); }
-.block[data-paint="black"] { fill: var(--line); }
-.flash { fill: #fff; opacity: 0; pointer-events: none; }
-@media (prefers-color-scheme: dark) { .flash { fill: #fff; } }
-@media (prefers-reduced-motion: reduce) { .block { transition: none; } }
-
-/* Slot cards */
+/* Slot cards: Codex Cards, one row each. The deltas: a button, not a link,
+   so its text aligns left; a trust-signal icon in the supporting text; the
+   Trending chip at the end. Long text wraps, as in Codex. */
 
 .slot {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  padding: 10px 12px 12px;
+  width: 100%;
+  font: inherit;
   text-align: left;
-  background: var(--surface);
-  border: var(--rule) solid var(--line);
-  border-radius: var(--radius);
   cursor: pointer;
 }
-.slot:hover { background: color-mix(in srgb, var(--surface) 88%, var(--ink)); }
-.slot-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-/* Article thumbnails. In a card: inset by the card's padding and as tall as
-   its text, while the card keeps one line per row (long text truncates, the
-   card never grows). In search results: small, first. */
-.thumb {
-  display: block;
-  object-fit: cover;
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
-}
-.results .thumb { width: 40px; height: 40px; }
-
-.slot { --thumb: 64px; padding-right: calc(var(--thumb) + 24px); }
-.slot .thumb {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: var(--thumb);
-  height: calc(100% - 20px);
-}
-.slot .thumb:not([src]) { display: none; }
-.slot:has(.thumb:not([src])) { padding-right: 12px; }
-@media (max-width: 820px) {
-  .slot { --thumb: 44px; }
-}
-
-.slot-title, .slot-readout {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.slot-title { font-weight: 700; font-size: 16px; }
-.slot-readout { font-size: 13px; color: var(--muted); }
-.slot.loading .slot-title, .slot.loading .slot-readout { opacity: 0.45; }
-.slot .spinner { margin-left: auto; }
-
+.slot .cdx-card__text { flex: 1; min-width: 0; }
+/* Dense: no gap between the two lines (Codex spaces the supporting text apart). */
+.slot .cdx-card__text__supporting-text { margin-top: 0; }
+.slot-signal .cdx-icon[hidden] { display: none; }
+.slot-signal { display: flex; align-items: flex-start; gap: var(--spacing-25); min-width: 0; }
+/* The icon centred on the first line, however many the text wraps to. */
+.slot-signal .cdx-icon { margin-top: calc((var(--line-height-small) - var(--size-icon-small)) / 2); }
+.slot-signal .spinner { flex: none; margin-top: calc((var(--line-height-small) - var(--size-icon-x-small)) / 2); }
+.slot-signal .cdx-icon { flex: none; }
+.slot-trend { flex: none; margin-left: var(--spacing-75); }
+.slot-trend[hidden] { display: none; }
+.slot.loading .cdx-card__text { opacity: 0.5; }
 
 .spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid color-mix(in srgb, var(--ink) 20%, transparent);
-  border-top-color: var(--ink);
-  border-radius: 50%;
+  width: var(--size-icon-x-small);
+  height: var(--size-icon-x-small);
+  border: var(--border-width-thick) var(--border-style-base) var(--border-color-subtle);
+  border-top-color: var(--border-color-progressive);
+  border-radius: var(--border-radius-circle);
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Credits */
+/* Hidden halves of a Codex Thumbnail (image or placeholder). */
+.cdx-thumbnail [hidden] { display: none; }
 
+/* Tuning: a Codex Card holding the Pitch slider, the Mood knob and the Octave buttons. */
+
+.tuning {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(96px, 1fr) auto;
+  gap: var(--spacing-75);
+}
+/* Label, then the control centred under it. */
+.control { display: grid; grid-template-rows: auto 1fr; justify-items: center; align-items: center; gap: var(--spacing-35); min-width: 0; }
+
+/* The Mood knob (see knob.js): notches round a face and the mood's name as
+   its pointer, snapping between them. The current notch and the name are the
+   base colour, and turn progressive on hover. */
+.knob {
+  width: min(100%, 112px);
+  aspect-ratio: 1;
+  border-radius: var(--border-radius-circle);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.knob.turning { cursor: grabbing; }
+.knob svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.knob .tick { fill: var(--border-color-subtle); transition: fill var(--transition-duration-base); }
+.knob .tick.on { fill: var(--color-base); }
+.knob .face {
+  fill: var(--background-color-base);
+  stroke: var(--border-color-emphasized);
+  stroke-width: var(--border-width-base);
+  vector-effect: non-scaling-stroke;
+  transition: fill var(--transition-duration-base);
+}
+.knob:hover .face, .knob.turning .face { fill: var(--background-color-interactive-subtle--hover); }
+.knob .pointer {
+  fill: var(--color-base);
+  transform-box: view-box;
+  transform-origin: 50px 50px;
+  transition: transform 0.12s cubic-bezier(0.3, 1.5, 0.5, 1); /* a snap, overshooting a touch */
+}
+.knob .pointer-text {
+  fill: var(--color-base);
+  font-family: var(--font-family-base);
+  font-weight: var(--font-weight-bold);
+  transition: fill var(--transition-duration-base);
+}
+.knob:hover :is(.tick.on, .pointer-text), .knob.turning :is(.tick.on, .pointer-text) { fill: var(--color-progressive); }
+
+/* Pitch (see infinity.js): a thumb that slides round an infinity-shaped
+   track, snapping notch to notch, with the note inside it. The thumb is
+   inverted, and all progressive on hover. */
+.infinity {
+  position: relative;
+  width: 100%;
+  max-width: 240px;
+  aspect-ratio: 2 / 1;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.infinity.sliding { cursor: grabbing; }
+.infinity svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.infinity .track { fill: none; stroke: var(--border-color-emphasized); stroke-width: var(--border-width-base); vector-effect: non-scaling-stroke; }
+.infinity .tick { fill: var(--border-color-emphasized); }
+.infinity .thumb {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: var(--size-200);
+  height: var(--size-200);
+  padding: 0 var(--spacing-25);
+  transform: translate(-50%, -50%);
+  color: var(--color-inverted);
+  background-color: var(--background-color-inverted);
+  border: var(--border-width-thick) var(--border-style-base) var(--background-color-inverted);
+  border-radius: var(--border-radius-pill);
+  font-weight: var(--font-weight-bold);
+  pointer-events: none;
+  transition-property: left, top, background-color, border-color;
+  transition-duration: 0.1s, 0.1s, var(--transition-duration-base), var(--transition-duration-base);
+  transition-timing-function: ease-out;
+}
+.infinity:hover .thumb, .infinity.sliding .thumb {
+  background-color: var(--background-color-progressive);
+  border-color: var(--border-color-progressive);
+}
+
+/* Octave: Codex icon buttons that show where the octave is by their sizes
+   (see sizeButton() in app.js). Each sits in a large button's space, so the
+   layout holds still as they grow and shrink. */
+.octave { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-50); }
+.octave > * { flex: none; }
+.octave .cdx-button--size-medium { margin: calc((var(--size-275) - var(--size-200)) / 2); }
+.octave .cdx-button--size-small { margin: calc((var(--size-275) - var(--size-150)) / 2); }
+
+/* With room (see .deck): the controls in one column beside the cards, the
+   octave buttons side by side, lower on the left. */
+@container panel (min-width: 560px) {
+  .deck { grid-template-columns: minmax(0, 1fr) 17rem; }
+  .tuning { grid-template-columns: minmax(0, 1fr); row-gap: var(--spacing-100); }
+  .octave { flex-direction: row-reverse; }
+  .knob { width: 136px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .knob .pointer, .knob .tick, .knob .face, .knob .pointer-text, .infinity .thumb { transition: none; }
+}
+
+.hint { color: var(--color-subtle); }
+kbd {
+  font-family: var(--font-family-monospace);
+  font-size: var(--font-size-x-small);
+  line-height: var(--line-height-x-small);
+  padding: 0 var(--spacing-25);
+  border: var(--border-width-base) var(--border-style-base) var(--border-color-base);
+  border-radius: var(--border-radius-base);
+  background-color: var(--background-color-neutral-subtle);
+}
+@media (hover: none) { .hint .keys { display: none; } }
+
+/* Credits: Codex's Small style, with a divider above. */
 .credits {
   margin-top: auto;
-  padding-top: 16px;
-  color: var(--muted);
-  font-size: 12px;
-  border-top: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  padding-top: var(--spacing-100);
+  color: var(--color-subtle);
+  border-top: var(--border-width-base) var(--border-style-base) var(--border-color-divider);
 }
-.credits a, dialog a { color: inherit; }
 
-/* Dialogs */
+/* The painting */
+
+/* No seams between the squares of a street. */
+#painting { shape-rendering: crispEdges; }
+.shape[data-paint="red"] { fill: var(--paint-red); }
+.shape[data-paint="blue"] { fill: var(--paint-blue); }
+.shape[data-paint="yellow"] { fill: var(--paint-yellow); }
+.shape[data-paint="grey"] { fill: var(--paint-grey); }
+/* Pressed (see press() in app.js): shrinks toward its centre fast, then springs
+   back, overshooting a little. */
+.shape {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.26s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.shape.pressing { transition: transform 0.06s ease-out; }
+@media (prefers-reduced-motion: reduce) { .shape, .shape.pressing { transition: none; } }
+
+/* Dialogs: a native <dialog> for the modal behaviour, holding a Codex Dialog.
+   The deltas: the <dialog> itself is invisible, its backdrop is Codex's, and
+   the Codex Dialog gets Codex's own desktop width. */
 
 dialog {
-  width: min(480px, calc(100vw - 32px));
-  max-height: min(640px, calc(100dvh - 32px));
   padding: 0;
-  border: var(--rule) solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--ink);
+  border: 0;
+  background: none;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
 }
-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+dialog::backdrop { background-color: var(--background-color-backdrop-light); }
+dialog .cdx-dialog { max-width: 32rem; max-height: calc(100dvh - var(--spacing-200)); }
+dialog .cdx-dialog__body { display: flex; flex-direction: column; gap: var(--spacing-75); }
+dialog .cdx-dialog__body ul { margin: 0; padding-left: var(--spacing-125); display: grid; gap: var(--spacing-50); }
 
-.sheet { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
-.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -4px -6px 0 0; }
-.sheet h2 { margin: 0; font-size: 20px; }
-.sheet p { margin: 0; }
-.sheet-note { color: var(--muted); font-size: 14px; }
+/* The search field fills the dialog (Codex's default is a minimum width). */
+.cdx-text-input { min-width: 0; width: 100%; }
+/* Only Codex icons: hide the browser's own clear button. */
+.cdx-text-input__input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 
-.search { position: relative; }
-.search svg {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  width: 20px;
-  height: 20px;
-  transform: translateY(-50%);
-  fill: var(--muted);
-  pointer-events: none;
-}
-
-input[type="search"] {
+/* Results: Codex Menu Items. Each holds a button, reset so the item paints it. */
+.results { list-style: none; margin: 0 calc(-1 * var(--spacing-150)); padding: 0; }
+.results:empty { display: none; }
+.cdx-menu-item__content {
   width: 100%;
-  padding: 10px 12px 10px 40px;
+  padding: 0;
   font: inherit;
   color: inherit;
-  background: var(--paper);
-  border: var(--rule) solid var(--line);
-  border-radius: var(--radius);
-}
-input[type="search"]:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
-
-.results { list-style: none; margin: 0; padding: 0; }
-.results:empty { display: none; }
-.results button {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  align-items: center;
-  column-gap: 12px;
-  width: 100%;
-  padding: 8px 10px;
   text-align: left;
-  background: transparent;
+  background: none;
   border: 0;
-  border-radius: var(--radius);
   cursor: pointer;
 }
-.results button:hover, .results button:focus-visible { background: color-mix(in srgb, var(--ink) 8%, transparent); }
-.results .title { display: block; font-weight: 600; }
-.results .text { min-width: 0; }
-.results .description { display: block; font-size: 13px; color: var(--muted); }
-.results .empty { padding: 8px 10px; color: var(--muted); font-size: 14px; }
+.cdx-menu-item { padding-inline: var(--spacing-150); }
+.cdx-menu-item__text { min-width: 0; }
+.results .empty { padding: var(--spacing-50) var(--spacing-150); color: var(--color-subtle); }
 
-button.wide {
-  padding: 10px 14px;
-  font-weight: 700;
-  background: var(--ink);
-  color: var(--paper);
-  border: 0;
-  border-radius: var(--radius);
-  cursor: pointer;
-}
+.wide { width: 100%; }
 
-.explain { margin: 0; padding-left: 20px; display: grid; gap: 10px; font-size: 14px; }
-
-/* Toast */
-
+/* Toast: a Codex Message (notice), floating at the bottom. */
 .toast {
   position: fixed;
   left: 50%;
-  bottom: max(20px, env(safe-area-inset-bottom));
-  transform: translate(-50%, 20px);
-  padding: 10px 16px;
-  background: var(--ink);
-  color: var(--paper);
-  border-radius: var(--radius);
-  font-size: 14px;
+  bottom: max(var(--spacing-125), env(safe-area-inset-bottom));
+  max-width: calc(100vw - var(--spacing-200));
+  box-shadow: var(--box-shadow-drop-medium);
+  transform: translate(-50%, var(--spacing-125));
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s, transform 0.2s;
-  max-width: calc(100vw - 32px);
+  transition-property: opacity, transform;
+  transition-duration: var(--transition-duration-medium);
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
-/* Only Codex icons: hide the browser's own clear button. */
-input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+/* Text size: every piece of text, headings aside, in Codex's Small style
+   (its size and line height). Set on the text itself, not by remapping
+   --font-size-* tokens, because Codex also sizes its icons from those. Last
+   in the file, so it wins. */
+body,
+small,
+.cdx-button,
+.cdx-label,
+.cdx-card__text,
+.cdx-card__text__title,
+.cdx-card__text__supporting-text,
+.cdx-info-chip__text,
+.cdx-dialog__body,
+.cdx-text-input__input,
+.cdx-menu-item,
+.cdx-message__content,
+.infinity .thumb,
+.results .empty {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}

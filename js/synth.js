@@ -1,46 +1,54 @@
-// How article properties become sound, and a small Web Audio synth that plays it.
+// How article trust signals become sound, and a small Web Audio synth that plays it.
+// The signals come from the Wikimedia Attribution API (see wiki.js).
 //
-// - Waveform: the article's broad topic picks the oscillator.
-// - Filter: how many pages link to it sets the brightness (low-pass cutoff).
-// - Envelope: how old it is sets the decay (older, longer).
-// - Effect: how often it's edited sets the vibrato (busier, wobblier).
+// - Waveform: the more people have written the article, the richer the tone.
+// - Filter: the more references it cites, the brighter the sound.
+// - Envelope: the more it's read (page views, last 30 days), the longer each note rings.
+// - Effect: the more recently it was updated, the more the note wobbles; a
+//   trending article shimmers.
 
 import { frequency } from './painting.js';
 
 export const SoundMap = {
-  waveform(topic) {
-    if (topic === 'STEM') return 'square';
-    if (topic === 'Culture') return 'sawtooth';
-    if (topic === 'Geography') return 'triangle';
-    return 'sine'; // History and society, or unknown
+  /** A few writers → a pure sine … a big crowd → a sawtooth, full of harmonics. */
+  waveform(contributors) {
+    if (contributors >= 1500) return 'sawtooth';
+    if (contributors >= 400) return 'square';
+    if (contributors >= 100) return 'triangle';
+    return 'sine';
   },
-  /** 0 links → 250 Hz (muffled) … 30,000+ links → 7 kHz (bright), on a log scale. */
-  cutoff(links) {
-    const t = clamp(Math.log10(links + 1) / Math.log10(30000), 0, 1);
+  /** 0 references → 250 Hz (muffled) … 400+ → 7 kHz (bright), on a log scale. */
+  cutoff(references) {
+    const t = clamp(Math.log10(references + 1) / Math.log10(401), 0, 1);
     return 250 * (7000 / 250) ** t;
   },
-  /** New → a short pluck (0.12 s) … 24+ years → a long ring (2.2 s). */
-  decay(ageYears) {
-    return 0.12 + clamp(ageYears / 24, 0, 1) * 2.08;
+  /** 100 views a month or fewer → a short pluck (0.12 s) … a million+ → a long ring (2.2 s), on a log scale. */
+  decay(pageViews) {
+    const t = clamp((Math.log10(pageViews + 1) - 2) / 4, 0, 1);
+    return 0.12 + t * 2.08;
   },
-  /** No edits this month → steady … 50+ → a wide wobble (45 cents). */
-  vibratoDepth(edits) {
-    return clamp(Math.log10(edits + 1) / Math.log10(51), 0, 1) * 45;
+  /** Updated today → a wide wobble (45 cents) … a year or more ago → steady; trending → at least a shimmer (30 cents). */
+  vibratoDepth(daysSinceUpdate, trending) {
+    const freshness = daysSinceUpdate === null ? 0 : 1 - clamp(Math.log10(daysSinceUpdate + 1) / Math.log10(366), 0, 1);
+    return Math.max(freshness * 45, trending ? 30 : 0);
   },
-  /** Busier pages wobble faster too: 4 Hz … 7 Hz. */
-  vibratoRate(edits) {
-    return 4 + clamp(edits / 50, 0, 1) * 3;
+  /** Fresher pages wobble faster too: 4 Hz … 7 Hz; trending ones shimmer at 7.5 Hz. */
+  vibratoRate(daysSinceUpdate, trending) {
+    if (trending) return 7.5;
+    const freshness = daysSinceUpdate === null ? 0 : 1 - clamp(Math.log10(daysSinceUpdate + 1) / Math.log10(366), 0, 1);
+    return 4 + freshness * 3;
   },
 };
 
 /** The synth settings four articles make (by slot). */
 export function soundOf(articles) {
+  const { effect } = articles;
   return {
-    waveform: SoundMap.waveform(articles.waveform.topic),
-    cutoffHz: SoundMap.cutoff(articles.filter.incomingLinks),
-    decaySec: SoundMap.decay(articles.envelope.ageYears),
-    vibratoCents: SoundMap.vibratoDepth(articles.effect.editsLastMonth),
-    vibratoHz: SoundMap.vibratoRate(articles.effect.editsLastMonth),
+    waveform: SoundMap.waveform(articles.waveform.contributors),
+    cutoffHz: SoundMap.cutoff(articles.filter.references),
+    decaySec: SoundMap.decay(articles.envelope.pageViews),
+    vibratoCents: SoundMap.vibratoDepth(effect.daysSinceUpdate, effect.trending),
+    vibratoHz: SoundMap.vibratoRate(effect.daysSinceUpdate, effect.trending),
   };
 }
 

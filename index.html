@@ -7,94 +7,123 @@
   <meta name="description" content="An instrument made of Wikipedia articles. Every choice sounds and looks different.">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <!-- Codex design tokens and component styles, with change 1304941 applied (see vendor/codex/README.md).
+       The dark tokens stack over the light ones when the system is dark, as Codex's own mode files do. -->
+  <link rel="stylesheet" href="vendor/codex/theme-wikimedia-ui.css">
+  <link rel="stylesheet" href="vendor/codex/theme-wikimedia-ui-mode-dark.css" media="(prefers-color-scheme: dark)">
+  <link rel="stylesheet" href="vendor/codex/codex.style.css">
   <link rel="stylesheet" href="style.css">
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
   <main class="page">
     <section class="instrument" aria-label="Instrument">
-      <svg id="painting" role="img" aria-label="The painting: tap a rectangle to play its note"></svg>
+      <svg id="painting" role="img" aria-label="The painting: tap a coloured square or block to play its note"></svg>
     </section>
 
     <div class="panel">
       <header class="bar">
-        <div class="brand">
+        <div class="title-row">
           <h1>Mondrian</h1>
-          <p class="tagline">An instrument made of Wikipedia articles. Every choice sounds and looks different.</p>
+          <nav class="actions" aria-label="Instrument">
+            <!-- Icons: Codex (@wikimedia/codex-icons) cdxIconReload, cdxIconDie, cdxIconLink, cdxIconInfo -->
+            <button type="button" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only" id="reset" title="Reset to default" aria-label="Reset to default">
+              <span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1a8.98 8.98 0 016.999 3.343L17 2h2v5l-1 1h-5l-.001-2h2.746a7 7 0 101.184 5h2.016A9 9 0 1110 1"/></svg></span>
+            </button>
+            <button type="button" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only" id="new-sound" title="New sound" aria-label="New sound">
+              <span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M19 19H1V1h18zM3 17h14V3H3z"/><circle cx="6.5" cy="6.5" r="1.5"/><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="6.5" cy="13.5" r="1.5"/><circle cx="13.5" cy="13.5" r="1.5"/></svg></span>
+            </button>
+            <button type="button" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only" id="share" title="Copy link" aria-label="Copy link">
+              <span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.862 7.453a4.353 4.353 0 016.167-.01l.707.706-1.414 1.414-.707-.707a2.355 2.355 0 00-3.335.005L4.354 11.81a2.725 2.725 0 003.842 3.868l.046-.046.715-.7 1.4 1.43-.715.698-.046.046A4.727 4.727 0 012.934 10.4z"/><path d="M10.405 2.894a4.726 4.726 0 016.662 6.707l-2.928 2.947a4.354 4.354 0 01-6.167.01l-.707-.707 1.414-1.415.707.707c.921.921 2.416.92 3.334-.004l2.928-2.948a2.727 2.727 0 00-3.843-3.868l-.761.746-1.4-1.428.713-.7z"/></svg></span>
+            </button>
+            <button type="button" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only" id="open-about" title="How it works" aria-label="How it works">
+              <span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 13h1v2H8v-2h1v-2H8V9h3zm0-6H9V5h2z"/><path d="M10 1a9 9 0 110 18 9 9 0 010-18m0 2a7 7 0 100 14 7 7 0 000-14"/></svg></span>
+            </button>
+          </nav>
         </div>
-        <nav class="actions" aria-label="Instrument">
-          <!-- Icons: Codex (@wikimedia/codex-icons) cdxIconReload, cdxIconDie, cdxIconLink, cdxIconInfo -->
-          <button class="icon" id="reset" title="Reset to default" aria-label="Reset to default">
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1a8.98 8.98 0 016.999 3.343L17 2h2v5l-1 1h-5l-.001-2h2.746a7 7 0 101.184 5h2.016A9 9 0 1110 1"/></svg>
-        </button>
-        <button class="icon" id="new-sound" title="New sound" aria-label="New sound">
-            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M19 19H1V1h18zM3 17h14V3H3z"/><circle cx="6.5" cy="6.5" r="1.5"/><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="6.5" cy="13.5" r="1.5"/><circle cx="13.5" cy="13.5" r="1.5"/></svg>
-          </button>
-          <button class="icon" id="share" title="Copy link" aria-label="Copy link">
-            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.862 7.453a4.353 4.353 0 016.167-.01l.707.706-1.414 1.414-.707-.707a2.355 2.355 0 00-3.335.005L4.354 11.81a2.725 2.725 0 003.842 3.868l.046-.046.715-.7 1.4 1.43-.715.698-.046.046A4.727 4.727 0 012.934 10.4z"/><path d="M10.405 2.894a4.726 4.726 0 016.662 6.707l-2.928 2.947a4.354 4.354 0 01-6.167.01l-.707-.707 1.414-1.415.707.707c.921.921 2.416.92 3.334-.004l2.928-2.948a2.727 2.727 0 00-3.843-3.868l-.761.746-1.4-1.428.713-.7z"/></svg>
-          </button>
-          <button class="icon" id="open-about" title="How it works" aria-label="How it works">
-            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 13h1v2H8v-2h1v-2H8V9h3zm0-6H9V5h2z"/><path d="M10 1a9 9 0 110 18 9 9 0 010-18m0 2a7 7 0 100 14 7 7 0 000-14"/></svg>
-          </button>
-        </nav>
+        <p class="tagline">An instrument made of Wikipedia articles. Every choice sounds and looks different.</p>
       </header>
 
-      <section class="slots" id="slots" aria-label="The four articles"></section>
-      <div class="tuning" role="group" aria-label="Tuning">
-        <div class="field">
-          <label class="field-label" for="key">Key</label>
-          <span class="select"><select id="key"></select><svg class="chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m16.7 8-6 6H9.3l-6-6 1.4-1.4 5.3 5.3 5.3-5.3z"/></svg></span>
-        </div>
-        <div class="field">
-          <span class="field-label" id="octave-label">Octave</span>
-          <div class="stepper" role="group" aria-labelledby="octave-label">
-            <button type="button" id="octave-down" aria-label="Octave down"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M18 11H2V9h16z"/></svg></button>
-            <output id="octave" aria-live="polite"></output>
-            <button type="button" id="octave-up" aria-label="Octave up"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 9h7v2h-7v7H9v-7H2V9h7V2h2z"/></svg></button>
+      <!-- The articles and the sound controls: stacked, or side by side when the panel is wide enough. -->
+      <div class="deck">
+        <section class="slots" id="slots" aria-label="The four articles"></section>
+        <div class="cdx-card tuning" role="group" aria-label="Tuning">
+          <div class="control">
+            <div class="cdx-label"><span class="cdx-label__label" id="pitch-label"><span class="cdx-label__label__text">Pitch</span></span></div>
+            <div class="infinity" id="pitch" role="slider" tabindex="0" aria-labelledby="pitch-label"></div>
+          </div>
+          <div class="control">
+            <div class="cdx-label"><span class="cdx-label__label" id="mood-label"><span class="cdx-label__label__text">Mood</span></span></div>
+            <div class="knob" id="mood" role="slider" tabindex="0" aria-labelledby="mood-label"></div>
+          </div>
+          <div class="control">
+            <div class="cdx-label"><span class="cdx-label__label" id="octave-label"><span class="cdx-label__label__text">Octave</span></span></div>
+            <div class="octave" role="group" aria-labelledby="octave-label">
+              <!-- Icons: Codex cdxIconAdd, cdxIconSubtract -->
+              <button type="button" class="cdx-button cdx-button--icon-only cdx-button--size-large" id="octave-up" aria-label="Higher"><span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 9h7v2h-7v7H9v-7H2V9h7V2h2z"/></svg></span></button>
+              <button type="button" class="cdx-button cdx-button--icon-only cdx-button--size-large" id="octave-down" aria-label="Lower"><span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M18 11H2V9h16z"/></svg></span></button>
+            </div>
+            <output class="visually-hidden" id="octave" aria-live="polite"></output>
           </div>
         </div>
-        <div class="field field-wide">
-          <label class="field-label" for="scale">Scale</label>
-          <span class="select"><select id="scale"></select><svg class="chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m16.7 8-6 6H9.3l-6-6 1.4-1.4 5.3 5.3 5.3-5.3z"/></svg></span>
-        </div>
       </div>
-      <p class="hint">Tap or drag across the painting.<span class="keys"> On a keyboard, play <kbd>A</kbd>–<kbd>L</kbd>; <kbd>−</kbd> and <kbd>+</kbd> change the octave.</span></p>
 
-      <footer class="credits" id="credits"></footer>
+      <p class="hint"><small>Tap the colours, or drag along a street. The bigger the shape, the lower the note.<span class="keys"> On a keyboard, play <kbd>1</kbd>–<kbd>4</kbd>, <kbd>Q</kbd>–<kbd>R</kbd>, <kbd>A</kbd>–<kbd>F</kbd> and <kbd>Z</kbd>–<kbd>V</kbd>, one row per size; <kbd>−</kbd> and <kbd>+</kbd> change the octave.</span></small></p>
+
+      <footer class="credits"><small id="credits"></small></footer>
     </div>
   </main>
 
+  <!-- Dialogs: native <dialog> for the modal behaviour, wearing Codex Dialog's classes for the look. -->
   <dialog id="picker" aria-labelledby="picker-title">
-    <form method="dialog" class="sheet">
-      <div class="sheet-head">
-        <h2 id="picker-title"></h2>
-        <button class="icon" value="close" aria-label="Close"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.707 4.707 11.414 10l5.293 5.293-1.414 1.414L10 11.414l-5.293 5.293-1.414-1.414L8.586 10 3.293 4.707l1.414-1.414L10 8.586l5.293-5.293z"/></svg></button>
+    <form method="dialog" class="cdx-dialog">
+      <header class="cdx-dialog__header cdx-dialog__header--default">
+        <div class="cdx-dialog__header__title-group">
+          <h2 class="cdx-dialog__header__title" id="picker-title"></h2>
+        </div>
+        <button class="cdx-button cdx-button--weight-quiet cdx-button--icon-only cdx-dialog__header__close-button" value="close" aria-label="Close"><span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.707 4.707 11.414 10l5.293 5.293-1.414 1.414L10 11.414l-5.293 5.293-1.414-1.414L8.586 10 3.293 4.707l1.414-1.414L10 8.586l5.293-5.293z"/></svg></span></button>
+      </header>
+      <div class="cdx-dialog__body">
+        <p id="picker-hint"></p>
+        <!-- Icon: Codex cdxIconSearch -->
+        <div class="cdx-text-input cdx-text-input--has-start-icon">
+          <input class="cdx-text-input__input" id="picker-search" type="search" placeholder="Search articles" autocomplete="off" spellcheck="false" aria-label="Search articles">
+          <span class="cdx-icon cdx-icon--medium cdx-text-input__icon-vue cdx-text-input__start-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 1a7 7 0 015.605 11.191l5.102 5.102-1.414 1.414-5.102-5.102A7 7 0 118 1m0 2a5 5 0 100 10A5 5 0 008 3"/></svg></span>
+        </div>
+        <ul class="results" id="picker-results" aria-label="Articles"></ul>
       </div>
-      <p class="sheet-note" id="picker-hint"></p>
-      <div class="search"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 1a7 7 0 015.605 11.191l5.102 5.102-1.414 1.414-5.102-5.102A7 7 0 118 1m0 2a5 5 0 100 10A5 5 0 008 3"/></svg><input id="picker-search" type="search" placeholder="Search articles" autocomplete="off" spellcheck="false" aria-label="Search articles"></div>
-      <ul class="results" id="picker-results" aria-label="Articles"></ul>
-      <button type="button" class="wide" id="picker-surprise">Surprise me</button>
+      <footer class="cdx-dialog__footer">
+        <button type="button" class="cdx-button cdx-button--action-progressive cdx-button--weight-primary wide" id="picker-surprise">Surprise me</button>
+      </footer>
     </form>
   </dialog>
-
 
   <dialog id="about" aria-labelledby="about-title">
-    <form method="dialog" class="sheet">
-      <div class="sheet-head">
-        <h2 id="about-title">How it works</h2>
-        <button class="icon" value="close" aria-label="Close"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.707 4.707 11.414 10l5.293 5.293-1.414 1.414L10 11.414l-5.293 5.293-1.414-1.414L8.586 10 3.293 4.707l1.414-1.414L10 8.586l5.293-5.293z"/></svg></button>
+    <form method="dialog" class="cdx-dialog">
+      <header class="cdx-dialog__header cdx-dialog__header--default">
+        <div class="cdx-dialog__header__title-group">
+          <h2 class="cdx-dialog__header__title" id="about-title">How it works</h2>
+        </div>
+        <button class="cdx-button cdx-button--weight-quiet cdx-button--icon-only cdx-dialog__header__close-button" value="close" aria-label="Close"><span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.707 4.707 11.414 10l5.293 5.293-1.414 1.414L10 11.414l-5.293 5.293-1.414-1.414L8.586 10 3.293 4.707l1.414-1.414L10 8.586l5.293-5.293z"/></svg></span></button>
+      </header>
+      <div class="cdx-dialog__body cdx-dialog__body--no-footer">
+        <p>Four Wikipedia articles make the instrument. Each one shapes part of the sound with a <b>trust signal</b>: what the Wikimedia Attribution API says about how the article is written, sourced and read.</p>
+        <ul>
+          <li><b>Waveform</b>: the more people have written the article, the richer the tone, from a pure sine for a few writers to a sawtooth for a crowd.</li>
+          <li><b>Filter</b>: the more references it cites, the brighter the sound.</li>
+          <li><b>Envelope</b>: the more people read it (page views in the last 30 days), the longer each note rings.</li>
+          <li><b>Effect</b>: the more recently it was updated, the more the note wobbles. A trending article shimmers.</li>
+        </ul>
+        <p>Each colour is a note. Yellow is the home note, and red, blue and grey are the notes that go with it, so there are no wrong notes. Turn <b>Pitch</b> to move them all up or down, turn <b>Mood</b> to change which notes go together, from dreamy to spooky, and press <b>Octave</b> to move everything higher or lower. The same note lives all over the painting, and its size picks the octave: the squares on the streets are highest, then small blocks, medium blocks and large blocks, an octave lower each. White is quiet. Drag along a street to play a run.</p>
+        <p>The four article titles decide where the streets and blocks go and how the squares are coloured: the same articles always make the same painting.</p>
       </div>
-      <p>Four Wikipedia articles make the instrument. Each one shapes part of the sound.</p>
-      <ul class="explain">
-        <li><b>Waveform</b>: the article’s topic picks the tone. Science and technology are square, culture is sawtooth, geography is triangle, history and society are sine.</li>
-        <li><b>Filter</b>: the more pages link to the article, the brighter the sound.</li>
-        <li><b>Envelope</b>: the older the article, the longer each note rings.</li>
-        <li><b>Effect</b>: the more it’s been edited this month, the more the note wobbles.</li>
-      </ul>
-      <p>Each rectangle is a note in the key, scale and octave you choose; in a pentatonic scale there are no wrong notes. The bigger the rectangle, the lower the note. The four article titles decide the arrangement and colours: the same articles always make the same painting.</p>
     </form>
   </dialog>
 
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <!-- A Codex Message (notice), floating. Icon: Codex cdxIconInfoFilled -->
+  <div class="cdx-message toast" id="toast" role="status" aria-live="polite">
+    <span class="cdx-icon cdx-icon--medium cdx-message__icon--vue"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1a9 9 0 110 18 9 9 0 010-18M8 9v2h1v2H8v2h4v-2h-1V9zm1-4v2h2V5z"/></svg></span>
+    <div class="cdx-message__content" id="toast-text"></div>
+  </div>
 </body>
 </html>

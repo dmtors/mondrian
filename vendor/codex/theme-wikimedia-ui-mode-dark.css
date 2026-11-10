@@ -1,0 +1,137 @@
+/**
+ * Codex Design Tokens v2.6.2
+ * Design System for Wikimedia
+ * See https://doc.wikimedia.org/codex/latest/design-tokens/overview.html
+ */
+
+:root {
+  --color-base: #ebebeb;
+  --color-base--hover: #f3f3f3;
+  --color-emphasized: #f3f3f3;
+  --color-neutral: #cccccc;
+  --color-subtle: #a8a8a8;
+  --color-disabled: #595959;
+  --color-disabled-emphasized: #787878;
+  --color-inverted: #171717;
+  --color-progressive: #709fff; /* 'Progressive' Color and states */
+  --color-progressive--hover: #a3c2ff;
+  --color-progressive--active: #c2d6ff;
+  --color-destructive: #ff7357; /* 'Destructive' Color and states */
+  --color-destructive--hover: #fea998;
+  --color-destructive--active: #ffc8bd;
+  --color-visited: #b787ff; /* 'Visited' color. In combination with progressive. Used for default links. */
+  --color-visited--hover: #d1b2ff;
+  --color-visited--active: #e0ccff;
+  --color-destructive--visited: #ff6e93; /* Red link 'Visited' color. Used for visited red links. */
+  --color-destructive--visited--hover: #ffa6bd;
+  --color-destructive--visited--active: #ffc7d5;
+  --color-error: #ff7357;
+  --color-error--hover: #fea998;
+  --color-error--active: #ffc8bd;
+  --color-warning: #cf9700;
+  --color-success: #00b881;
+  --color-notice: #a8a8a8;
+  --color-icon-error: #ff7357;
+  --color-icon-warning: #cf9700;
+  --color-icon-success: #00b881;
+  --color-icon-notice: #a8a8a8;
+  --color-icon-progressive: #709fff;
+  --color-content-added: #00b881;
+  --color-content-removed: #ff7357;
+  --color-option-red: #ff7357;
+  --color-option-orange: #ff7a1a;
+  --color-option-yellow: #cf9700;
+  --color-option-lime: #27ba53;
+  --color-option-green: #00b881;
+  --color-option-blue: #709fff;
+  --color-option-purple: #b787ff;
+  --color-option-pink: #ff63d4;
+  --color-option-maroon: #ff6e93;
+  --color-base--subtle: #a8a8a8;
+  --box-shadow-color-base: #787878;
+  --box-shadow-color-subtle: #595959;
+  --box-shadow-color-emphasized: #ebebeb;
+  --box-shadow-color-progressive--active: #c2d6ff;
+  --box-shadow-color-progressive--focus: #709fff;
+  --box-shadow-color-progressive-selected: #709fff;
+  --box-shadow-color-progressive-selected--hover: #a3c2ff;
+  --box-shadow-color-progressive-selected--active: #c2d6ff;
+  --box-shadow-color-destructive--hover: #fea998;
+  --box-shadow-color-destructive--active: #ffc8bd;
+  --box-shadow-color-destructive--focus: #ff7357;
+  --box-shadow-color-inverted: #000;
+  --box-shadow-color-alpha-base: rgba(0, 0, 0, 0.87);
+  --mix-blend-mode-blend: screen;
+  --accent-color-base: #709fff;
+  --background-color-base: #171717; /* Background Colors for static elements (for page layout, sections, etc.) from here on. */
+  --background-color-neutral: #292929;
+  --background-color-neutral-subtle: #1c1c1c;
+  --background-color-interactive: #292929;
+  --background-color-interactive--hover: #424242;
+  --background-color-interactive--active: #595959;
+  --background-color-interactive-subtle: #1c1c1c;
+  --background-color-interactive-subtle--hover: #292929;
+  --background-color-interactive-subtle--active: #424242;
+  --background-color-disabled: #424242; /* Components like Buttons, Checkboxes, Radios, ProgressBars…. */
+  --background-color-disabled-subtle: #292929; /* Components like TextInputs, Selects…. */
+  --background-color-inverted: #ebebeb;
+  --background-color-progressive: #709fff;
+  --background-color-progressive--hover: #a3c2ff;
+  --background-color-progressive--active: #c2d6ff;
+  --background-color-progressive--focus: #709fff;
+  --background-color-progressive-subtle: #002d87;
+  --background-color-progressive-subtle--hover: #104dc8;
+  --background-color-progressive-subtle--active: #1d5ee0;
+  --background-color-destructive: #ff7357;
+  --background-color-destructive--hover: #fea998;
+  --background-color-destructive--active: #ffc8bd;
+  --background-color-destructive--focus: #ff7357;
+  --background-color-destructive-subtle: #6b1200;
+  --background-color-destructive-subtle--hover: #ad1d00;
+  --background-color-destructive-subtle--active: #c92200;
+  --background-color-error: #ff7357;
+  --background-color-error--hover: #fea998;
+  --background-color-error--active: #ffc8bd;
+  --background-color-error-subtle: #6b1200;
+  --background-color-error-subtle--hover: #ad1d00;
+  --background-color-error-subtle--active: #c92200;
+  --background-color-warning-subtle: #453200;
+  --background-color-success-subtle: #003d2b;
+  --background-color-notice-subtle: #292929;
+  --background-color-content-added: #002d87;
+  --background-color-content-removed: #453200;
+  --background-color-target-text: #5c2600;
+  --background-color-option-red: #6b1200;
+  --background-color-option-orange: #5c2600;
+  --background-color-option-yellow: #453200;
+  --background-color-option-lime: #004013;
+  --background-color-option-green: #003d2b;
+  --background-color-option-blue: #002d87;
+  --background-color-option-purple: #4100a1;
+  --background-color-option-pink: #6b004e;
+  --background-color-option-maroon: #70001d;
+  --border-color-base: #787878;
+  --border-color-emphasized: #ebebeb;
+  --border-color-subtle: #595959;
+  --border-color-muted: #424242;
+  --border-color-interactive--hover: #a8a8a8;
+  --border-color-interactive--active: #cccccc;
+  --border-color-disabled: #595959;
+  --border-color-inverted: #171717;
+  --border-color-progressive: #709fff;
+  --border-color-progressive--hover: #a3c2ff;
+  --border-color-progressive--active: #c2d6ff;
+  --border-color-progressive--focus: #709fff;
+  --border-color-destructive: #ff7357;
+  --border-color-destructive--hover: #fea998;
+  --border-color-destructive--active: #ffc8bd;
+  --border-color-destructive--focus: #ff2b00;
+  --border-color-error: #ff7357;
+  --border-color-error--hover: #fea998;
+  --border-color-error--active: #ffc8bd;
+  --border-color-warning: #cf9700;
+  --border-color-warning--hover: #f5bb1b;
+  --border-color-warning--active: #ffd76e;
+  --border-color-content-added: #709fff;
+  --border-color-content-removed: #cf9700;
+}

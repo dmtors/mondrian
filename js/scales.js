@@ -1,27 +1,31 @@
-// Keys and scales: which nine notes the painting's rectangles play, lowest
-// (biggest rectangle) to highest. The painting itself never changes with the
-// key; only the notes do.
+// Pitch and mood: which notes the painting's four colours play. The pitch is
+// the home note (yellow); the mood is which three notes go with it (red, blue
+// and grey), each mood a set that always sounds good together. Each size of
+// shape plays them in its own octave: large blocks two below the home note's,
+// medium blocks one below, small blocks in it, and the squares one above. The
+// painting itself never changes with pitch or mood; only the notes do.
 
 export const KEYS = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
 
-/** Semitones above the root for one octave of each scale. */
-export const SCALES = [
-  { id: 'major-pentatonic', name: 'Major pentatonic', steps: [0, 2, 4, 7, 9] },
-  { id: 'minor-pentatonic', name: 'Minor pentatonic', steps: [0, 3, 5, 7, 10] },
-  { id: 'blues', name: 'Blues', steps: [0, 3, 5, 6, 7, 10] },
-  { id: 'major', name: 'Major', steps: [0, 2, 4, 5, 7, 9, 11] },
-  { id: 'minor', name: 'Natural minor', steps: [0, 2, 3, 5, 7, 8, 10] },
-  { id: 'harmonic-minor', name: 'Harmonic minor', steps: [0, 2, 3, 5, 7, 8, 11] },
-  { id: 'dorian', name: 'Dorian', steps: [0, 2, 3, 5, 7, 9, 10] },
-  { id: 'phrygian', name: 'Phrygian', steps: [0, 1, 3, 5, 7, 8, 10] },
-  { id: 'lydian', name: 'Lydian', steps: [0, 2, 4, 6, 7, 9, 11] },
-  { id: 'mixolydian', name: 'Mixolydian', steps: [0, 2, 4, 5, 7, 9, 10] },
-  { id: 'hirajoshi', name: 'Hirajōshi', steps: [0, 2, 3, 7, 8] },
-  { id: 'whole-tone', name: 'Whole tone', steps: [0, 2, 4, 6, 8, 10] },
+/**
+ * The moods, brightest first: semitones above the home note for yellow, red,
+ * blue and grey. (In music terms each is a four-note chord: a major seventh,
+ * major sixth, dominant seventh, whole-tone, minor sixth, minor seventh, minor
+ * with a flat sixth, and diminished seventh.)
+ */
+export const MOODS = [
+  { id: 'dreamy', name: 'Dreamy', steps: [0, 4, 7, 11] },
+  { id: 'sunny', name: 'Sunny', steps: [0, 4, 7, 9] },
+  { id: 'boogie', name: 'Boogie', steps: [0, 4, 7, 10] },
+  { id: 'floaty', name: 'Floaty', steps: [0, 4, 6, 10] },
+  { id: 'jazzy', name: 'Jazzy', steps: [0, 3, 7, 9] },
+  { id: 'moody', name: 'Moody', steps: [0, 3, 7, 10] },
+  { id: 'mysterious', name: 'Mysterious', steps: [0, 3, 7, 8] },
+  { id: 'spooky', name: 'Spooky', steps: [0, 3, 6, 9] },
 ];
 
 export const DEFAULT_KEY = 0; // C
-export const DEFAULT_SCALE = 'major-pentatonic';
+export const DEFAULT_MOOD = 'sunny';
 
 /** Short URL names for keys: C, Cs, D, Eb… */
 const KEY_SLUGS = ['C', 'Cs', 'D', 'Eb', 'E', 'F', 'Fs', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -30,10 +34,17 @@ export const keyFromSlug = (slug) => {
   const i = KEY_SLUGS.findIndex((k) => k.toLowerCase() === (slug || '').toLowerCase());
   return i < 0 ? null : i;
 };
-export const scaleById = (id) => SCALES.find((s) => s.id === id);
+export const moodById = (id) => MOODS.find((m) => m.id === id);
 
-/** How many octaves the instrument can move down or up from where each key starts. */
+/** How many octaves the instrument can move down or up from where each key starts (see octaveAllowed). */
 export const OCTAVE_SHIFTS = [-2, -1, 0, 1, 2];
+
+/** Octaves below (and above) the root's that the four sizes play in, large blocks first. */
+const REGISTER_OCTAVES = [-2, -1, 0, 1];
+
+/** The lowest and highest MIDI notes the instrument may play: C1 (33 Hz) to C8. */
+const LOWEST = 24;
+const HIGHEST = 108;
 
 /**
  * The octave the root is in (scientific pitch: C4 is middle C). With no shift,
@@ -42,9 +53,30 @@ export const OCTAVE_SHIFTS = [-2, -1, 0, 1, 2];
  */
 export const rootOctave = (key, shift = 0) => 4 + shift - (key > 5 ? 1 : 0);
 
-/** Nine MIDI notes, ascending through the scale from the root. */
-export function notesFor(key, scaleId, shift = 0) {
-  const { steps } = scaleById(scaleId) || scaleById(DEFAULT_SCALE);
+/**
+ * The notes as MIDI numbers: [register][colour], registers large → square
+ * (REGISTERS order) and colours in COLOURS order, lowest first in each.
+ */
+export function tonesFor(key, moodId, shift = 0) {
+  const { steps } = moodById(moodId) || moodById(DEFAULT_MOOD);
   const root = 12 * (rootOctave(key, shift) + 1) + key;
-  return Array.from({ length: 9 }, (_, i) => root + 12 * Math.floor(i / steps.length) + steps[i % steps.length]);
+  return REGISTER_OCTAVES.map((octave) => steps.map((step) => root + 12 * octave + step));
 }
+
+/** Whether [shift] keeps every note in the key audible: none below C1 or above C8. */
+export function octaveAllowed(key, shift) {
+  if (!OCTAVE_SHIFTS.includes(shift)) return false;
+  const root = 12 * (rootOctave(key, shift) + 1) + key;
+  // Every mood's notes lie within an octave of the home note (steps 0–11).
+  return root + 12 * REGISTER_OCTAVES[0] >= LOWEST && root + 12 * REGISTER_OCTAVES[3] + 11 <= HIGHEST;
+}
+
+/** The nearest allowed shift to [shift] for [key] (toward the middle). */
+export function nearestOctave(key, shift) {
+  let s = shift;
+  while (!octaveAllowed(key, s) && s !== 0) s += s > 0 ? -1 : 1;
+  return s;
+}
+
+/** The lowest note's octave, which names the instrument's range: C2 when the squares reach C5. */
+export const lowestOctave = (key, shift = 0) => rootOctave(key, shift) + REGISTER_OCTAVES[0];
