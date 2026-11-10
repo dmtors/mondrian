@@ -21,7 +21,7 @@ function svgEl(name, attrs = {}) {
 
 /** Points round a lemniscate of Bernoulli, from its right tip, upward first round the right loop. */
 function track() {
-  const a = 84;
+  const a = 92; // the loops' tips 8 units from the edges, so the track spans the control
   const points = [];
   for (let i = 0; i < SAMPLES; i++) {
     const t = (2 * Math.PI * i) / SAMPLES;

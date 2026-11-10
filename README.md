@@ -3,8 +3,8 @@
 An instrument made of articles. Four Wikipedia articles shape a synthesizer
 sound and paint a grid after Mondrian's *Broadway Boogie Woogie*: streets of
 equal squares in yellow, red, blue and grey, with bigger blocks in the white
-fields between. Tap the colours, drag along a street, or play the keyboard's
-left side (1–4, Q–R, A–F, Z–V: one row per size).
+fields between. Tap the colours, drag along a street, or play the keyboard
+(Q–R and A–F for the blocks, U–P and J–; for the higher notes: one row per size).
 
 Each slot's article shapes its part of the sound through a trust signal from
 the [Wikimedia Attribution API](https://www.mediawiki.org/wiki/Attribution_API) (beta):
@@ -34,8 +34,9 @@ The URL hash holds the titles (and pitch, mood and octave when not the
 default), so a link reproduces a painting and its sound.
 
 The interface is [Codex](https://doc.wikimedia.org/codex/): its design tokens and
-component styles, with Gerrit change
-[1304941](https://gerrit.wikimedia.org/r/c/design/codex/+/1304941) applied, are
+component styles, with Gerrit changes
+[1304941](https://gerrit.wikimedia.org/r/c/design/codex/+/1304941) and
+[1354777](https://gerrit.wikimedia.org/r/c/design/codex/+/1354777) applied, are
 vendored in `vendor/codex/` (see its README), and the markup wears Codex's
 classes. All icons are Codex icons (`@wikimedia/codex-icons`), inlined as SVG.
 
@@ -59,4 +60,5 @@ python3 serve.py   # like http.server, but with caching off so reloads pick up e
 - `js/scales.js`: pitches and moods, and the notes each size and colour plays
 - `js/infinity.js`: the infinity-track slider behind Pitch
 - `js/knob.js`: the notched knob behind Mood
+- `js/mood-pictures.js`: each mood's picture on the knob, from Wikimedia Commons, with its credit
 - `js/app.js`: UI, article picker, pitch, mood and octave, share link

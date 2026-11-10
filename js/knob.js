@@ -4,7 +4,9 @@
 // with a gap at the bottom, from lowest (bottom left) to highest (bottom right).
 // With [textPointer], the pointer is the current notch's name, written along
 // it from the centre outward (or, on the left half, from the tip inward, so it
-// never reads upside down), shrunk to fit when the name is long.
+// never reads upside down), shrunk to fit when the name is long. With
+// [picture], the face is a round picture for each notch instead, and the
+// lit notch alone shows where the knob points.
 
 const SVG = 'http://www.w3.org/2000/svg';
 const SWEEP = 270;
@@ -26,7 +28,7 @@ const TEXT_SIZE = 13;
  * [onTurn](i, how) runs when the user turns it to a new notch, [how] being
  * 'drag' or 'key'. Returns { set(i) } to move it without calling onTurn.
  */
-export function knob(el, { count, cyclic = false, label = String, onTurn, textPointer = false }) {
+export function knob(el, { count, cyclic = false, label = String, onTurn, textPointer = false, picture = null }) {
   const angleOf = (i) => (cyclic ? (360 / count) * i : -SWEEP / 2 + (SWEEP / (count - 1)) * i);
 
   const svg = svgEl('svg', { viewBox: '0 0 100 100', 'aria-hidden': 'true' });
@@ -36,11 +38,23 @@ export function knob(el, { count, cyclic = false, label = String, onTurn, textPo
     svg.append(tick);
     return tick;
   });
-  svg.append(svgEl('circle', { class: 'face', cx: 50, cy: 50, r: textPointer ? 38 : 34 }));
+  svg.append(svgEl('circle', { class: 'face', cx: 50, cy: 50, r: textPointer || picture ? 38 : 34 }));
   const pointer = svgEl('g', { class: 'pointer' });
   const text = textPointer ? svgEl('text', { class: 'pointer-text', 'dominant-baseline': 'central' }) : null;
-  pointer.append(text || svgEl('rect', { x: 46, y: 20, width: 8, height: 18 }));
+  if (!picture) pointer.append(text || svgEl('rect', { x: 46, y: 20, width: 8, height: 18 }));
   svg.append(pointer);
+  // The picture sits under the SVG, so the face's outline rings it. It fills
+  // the face circle (radius 38 of 100) and is framed by [picture](i).focus.
+  let image = null;
+  if (picture) {
+    const frame = document.createElement('span');
+    frame.className = 'picture';
+    image = document.createElement('img');
+    image.alt = '';
+    image.decoding = 'async';
+    frame.append(image);
+    el.append(frame);
+  }
   el.append(svg);
   el.setAttribute('aria-valuemin', '0');
   el.setAttribute('aria-valuemax', String(count - 1));
@@ -56,8 +70,17 @@ export function knob(el, { count, cyclic = false, label = String, onTurn, textPo
     shown = a;
     pointer.style.transform = `rotate(${a}deg)`;
     if (text) writePointer(label(i), angleOf(i));
+    if (image) showPicture(picture(i));
     el.setAttribute('aria-valuenow', String(i));
     el.setAttribute('aria-valuetext', label(i));
+  }
+
+  /** A notch's picture in the face: { src, focus: { x, y, zoom } } (x and y in %). */
+  function showPicture({ src, focus }) {
+    if (image.getAttribute('src') !== src) image.src = src;
+    image.style.objectPosition = `${focus.x}% ${focus.y}%`;
+    image.style.transformOrigin = `${focus.x}% ${focus.y}%`;
+    image.style.transform = `scale(${focus.zoom})`;
   }
 
   /** The name along the pointer: outward on the right half, inward on the left, so it reads the right way up. */

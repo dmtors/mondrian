@@ -7,7 +7,7 @@
   <meta name="description" content="An instrument made of Wikipedia articles. Every choice sounds and looks different.">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <!-- Codex design tokens and component styles, with change 1304941 applied (see vendor/codex/README.md).
+  <!-- Codex design tokens and component styles, with changes 1304941 and 1354777 applied (see vendor/codex/README.md).
        The dark tokens stack over the light ones when the system is dark, as Codex's own mode files do. -->
   <link rel="stylesheet" href="vendor/codex/theme-wikimedia-ui.css">
   <link rel="stylesheet" href="vendor/codex/theme-wikimedia-ui-mode-dark.css" media="(prefers-color-scheme: dark)">
@@ -47,18 +47,16 @@
       <!-- The articles and the sound controls: stacked, or side by side when the panel is wide enough. -->
       <div class="deck">
         <section class="slots" id="slots" aria-label="The four articles"></section>
-        <div class="cdx-card tuning" role="group" aria-label="Tuning">
-          <div class="control">
-            <div class="cdx-label"><span class="cdx-label__label" id="pitch-label"><span class="cdx-label__label__text">Pitch</span></span></div>
-            <div class="infinity" id="pitch" role="slider" tabindex="0" aria-labelledby="pitch-label"></div>
+        <!-- The sound controls, each in its own Codex Card. -->
+        <div class="tuning" role="group" aria-label="Tuning">
+          <div class="cdx-card control control-pitch">
+            <div class="infinity" id="pitch" role="slider" tabindex="0" aria-label="Pitch"></div>
           </div>
-          <div class="control">
-            <div class="cdx-label"><span class="cdx-label__label" id="mood-label"><span class="cdx-label__label__text">Mood</span></span></div>
-            <div class="knob" id="mood" role="slider" tabindex="0" aria-labelledby="mood-label"></div>
+          <div class="cdx-card control control-mood">
+            <div class="knob" id="mood" role="slider" tabindex="0" aria-label="Mood"></div>
           </div>
-          <div class="control">
-            <div class="cdx-label"><span class="cdx-label__label" id="octave-label"><span class="cdx-label__label__text">Octave</span></span></div>
-            <div class="octave" role="group" aria-labelledby="octave-label">
+          <div class="cdx-card control control-octave">
+            <div class="octave" role="group" aria-label="Octave">
               <!-- Icons: Codex cdxIconAdd, cdxIconSubtract -->
               <button type="button" class="cdx-button cdx-button--icon-only cdx-button--size-large" id="octave-up" aria-label="Higher"><span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 9h7v2h-7v7H9v-7H2V9h7V2h2z"/></svg></span></button>
               <button type="button" class="cdx-button cdx-button--icon-only cdx-button--size-large" id="octave-down" aria-label="Lower"><span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M18 11H2V9h16z"/></svg></span></button>
@@ -68,7 +66,7 @@
         </div>
       </div>
 
-      <p class="hint"><small>Tap the colours, or drag along a street. The bigger the shape, the lower the note.<span class="keys"> On a keyboard, play <kbd>1</kbd>–<kbd>4</kbd>, <kbd>Q</kbd>–<kbd>R</kbd>, <kbd>A</kbd>–<kbd>F</kbd> and <kbd>Z</kbd>–<kbd>V</kbd>, one row per size; <kbd>−</kbd> and <kbd>+</kbd> change the octave.</span></small></p>
+      <p class="hint"><small>Tap the colours, or drag along a street. The bigger the shape, the lower the note.<span class="keys"> On a keyboard, play the blocks with <kbd>Q</kbd>–<kbd>R</kbd> and <kbd>A</kbd>–<kbd>F</kbd>, and the higher notes with <kbd>U</kbd>–<kbd>P</kbd> and <kbd>J</kbd>–<kbd>;</kbd>, one row per size; <kbd>−</kbd> and <kbd>+</kbd> change the octave.</span></small></p>
 
       <footer class="credits"><small id="credits"></small></footer>
     </div>
@@ -85,12 +83,23 @@
       </header>
       <div class="cdx-dialog__body">
         <p id="picker-hint"></p>
-        <!-- Icon: Codex cdxIconSearch -->
-        <div class="cdx-text-input cdx-text-input--has-start-icon">
-          <input class="cdx-text-input__input" id="picker-search" type="search" placeholder="Search articles" autocomplete="off" spellcheck="false" aria-label="Search articles">
-          <span class="cdx-icon cdx-icon--medium cdx-text-input__icon-vue cdx-text-input__start-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 1a7 7 0 015.605 11.191l5.102 5.102-1.414 1.414-5.102-5.102A7 7 0 118 1m0 2a5 5 0 100 10A5 5 0 008 3"/></svg></span>
+        <!-- A Codex TypeaheadSearch (its structure and classes; the behaviour is in app.js): a
+             search field whose suggestions drop down in a menu, with thumbnails. Icon: Codex cdxIconSearch -->
+        <div class="cdx-typeahead-search cdx-typeahead-search--show-thumbnail" id="picker-typeahead">
+          <div class="cdx-typeahead-search__form">
+            <div class="cdx-search-input cdx-typeahead-search__input">
+              <div class="cdx-search-input__input-wrapper">
+                <div class="cdx-text-input cdx-text-input--has-start-icon cdx-search-input__text-input">
+                  <input class="cdx-text-input__input" id="picker-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="picker-results" aria-expanded="false" placeholder="Search articles" autocomplete="off" spellcheck="false" aria-label="Search articles">
+                  <span class="cdx-icon cdx-icon--medium cdx-text-input__icon-vue cdx-text-input__start-icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 1a7 7 0 015.605 11.191l5.102 5.102-1.414 1.414-5.102-5.102A7 7 0 118 1m0 2a5 5 0 100 10A5 5 0 008 3"/></svg></span>
+                </div>
+                <div class="cdx-menu cdx-typeahead-search__menu" id="picker-menu" hidden>
+                  <ul class="cdx-menu__listbox" role="listbox" id="picker-results" aria-label="Articles"></ul>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <ul class="results" id="picker-results" aria-label="Articles"></ul>
       </div>
       <footer class="cdx-dialog__footer">
         <button type="button" class="cdx-button cdx-button--action-progressive cdx-button--weight-primary wide" id="picker-surprise">Surprise me</button>
@@ -114,7 +123,7 @@
           <li><b>Envelope</b>: the more people read it (page views in the last 30 days), the longer each note rings.</li>
           <li><b>Effect</b>: the more recently it was updated, the more the note wobbles. A trending article shimmers.</li>
         </ul>
-        <p>Each colour is a note. Yellow is the home note, and red, blue and grey are the notes that go with it, so there are no wrong notes. Turn <b>Pitch</b> to move them all up or down, turn <b>Mood</b> to change which notes go together, from dreamy to spooky, and press <b>Octave</b> to move everything higher or lower. The same note lives all over the painting, and its size picks the octave: the squares on the streets are highest, then small blocks, medium blocks and large blocks, an octave lower each. White is quiet. Drag along a street to play a run.</p>
+        <p>Each colour is a note. Yellow is the home note, and red, blue and grey are the notes that go with it, so there are no wrong notes. Turn <b>Pitch</b> to move them all up or down, turn <b>Mood</b> (its picture shows the mood) to change which notes go together, from dreamy to spooky, and press <b>Octave</b> to move everything higher or lower. The same note lives all over the painting, and its size picks the octave: the squares on the streets are highest, then small blocks, medium blocks and large blocks, an octave lower each. White is quiet. Drag along a street to play a run.</p>
         <p>The four article titles decide where the streets and blocks go and how the squares are coloured: the same articles always make the same painting.</p>
       </div>
     </form>

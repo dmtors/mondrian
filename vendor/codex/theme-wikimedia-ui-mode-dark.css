@@ -1,5 +1,5 @@
 /**
- * Codex Design Tokens v2.6.2
+ * Codex Design Tokens v2.7.0
  * Design System for Wikimedia
  * See https://doc.wikimedia.org/codex/latest/design-tokens/overview.html
  */
@@ -60,7 +60,7 @@
   --box-shadow-color-destructive--active: #ffc8bd;
   --box-shadow-color-destructive--focus: #ff7357;
   --box-shadow-color-inverted: #000;
-  --box-shadow-color-alpha-base: rgba(0, 0, 0, 0.87);
+  --box-shadow-color-alpha-base: rgba( 0, 0, 0, 0.87 );
   --mix-blend-mode-blend: screen;
   --accent-color-base: #709fff;
   --background-color-base: #171717; /* Background Colors for static elements (for page layout, sections, etc.) from here on. */

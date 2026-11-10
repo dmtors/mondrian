@@ -1,6 +1,7 @@
 import { SLOTS, COLOURS, paint, gridFor, shapeAt } from './painting.js';
 import { KEYS as KEY_NAMES, MOODS, OCTAVE_SHIFTS, DEFAULT_KEY, DEFAULT_MOOD, tonesFor, octaveAllowed, nearestOctave, keySlug, keyFromSlug, moodById } from './scales.js';
 import { knob } from './knob.js';
+import { MOOD_PICTURES, commonsPage } from './mood-pictures.js';
 import { infinity } from './infinity.js';
 import { Synth, SoundMap, soundOf } from './synth.js';
 import { articleSignals, search, articleUrl, SURPRISES, STARTER } from './wiki.js';
@@ -44,15 +45,17 @@ function setThumbnail(thumbnail, src) {
 /** The hash keys a shared link uses for each slot. */
 const HASH_KEYS = { waveform: 'w', filter: 'f', envelope: 'e', effect: 'x' };
 /**
- * The keyboard's left side plays all sixteen notes, one row per size: Z–V the
- * large blocks, A–F medium, Q–R small, 1–4 the squares. Each column is a
- * colour: yellow, red, blue, grey. Higher rows play higher.
+ * The keyboard plays all sixteen notes, one row of four per size, in two
+ * hands: the left plays the blocks, Q W E R the medium ones over A S D F the
+ * large; the right plays the small blocks and squares, U I O P the squares
+ * over J K L ; the small blocks. Each column is a colour: yellow, red, blue,
+ * grey. Higher rows play higher.
  */
 const KEY_ROWS = [
-  ['KeyZ', 'KeyX', 'KeyC', 'KeyV'],
   ['KeyA', 'KeyS', 'KeyD', 'KeyF'],
   ['KeyQ', 'KeyW', 'KeyE', 'KeyR'],
-  ['Digit1', 'Digit2', 'Digit3', 'Digit4'],
+  ['KeyJ', 'KeyK', 'KeyL', 'Semicolon'],
+  ['KeyU', 'KeyI', 'KeyO', 'KeyP'],
 ];
 const KEY_NOTES = new Map(KEY_ROWS.flatMap((row, register) => row.map((code, c) => [code, { register, colour: COLOURS[c] }])));
 
@@ -110,6 +113,7 @@ function setTuning({ key, mood, shift }) {
   state.tones = tonesFor(key, mood, shift);
   knobs.pitch?.set(key);
   knobs.mood?.set(MOODS.findIndex((m) => m.id === mood));
+  renderCredits(); // the footer credits the current mood's picture
   // Only as far as every note stays audible: no lower than C1, no higher than C8.
   const reachable = OCTAVE_SHIFTS.filter((s) => octaveAllowed(key, s));
   $('octave').textContent = `Octave ${reachable.indexOf(shift) + 1} of ${reachable.length}`;
@@ -331,21 +335,22 @@ function renderSlots() {
   const container = $('slots');
   if (!container.children.length) {
     SLOTS.forEach((slot) => {
-      // A Codex Card (a link card, as it opens the picker): thumbnail, the
-      // article as its title, the trust signal and the slot's sound as
-      // supporting text, and a Codex Info Chip when the effect is trending.
-      // Two lines, so the slot is named in the sound ('muffled filter').
+      // A Codex Card (a link card, as it opens the picker): the article as its
+      // title; the sound ('Muffled filter') and the trust signal behind it as
+      // supporting text; a Codex Info Chip when the effect is trending; and
+      // the thumbnail at the end (Codex's inline-end position).
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'cdx-card cdx-card--is-link slot';
       card.dataset.slot = slot;
       card.innerHTML = `
-        <span class="cdx-card__thumbnail cdx-thumbnail">${THUMBNAIL}</span>
         <span class="cdx-card__text">
           <span class="cdx-card__text__title slot-title"></span>
+          <span class="cdx-card__text__supporting-text slot-sound"></span>
           <span class="cdx-card__text__supporting-text slot-signal">${SIGNAL_ICONS[slot]}<span class="slot-readout"></span></span>
         </span>
-        <span class="cdx-info-chip cdx-info-chip--warning slot-trend" hidden>${TRENDING_ICON}<span class="cdx-info-chip__text">Trending</span></span>`;
+        <span class="cdx-info-chip cdx-info-chip--warning slot-trend" hidden>${TRENDING_ICON}<span class="cdx-info-chip__text">Trending</span></span>
+        <span class="cdx-card__thumbnail cdx-thumbnail">${THUMBNAIL}</span>`;
       card.addEventListener('click', () => openPicker(slot));
       container.append(card);
     });
@@ -357,13 +362,15 @@ function renderSlots() {
     card.classList.toggle('loading', loading);
     setThumbnail(card.querySelector('.cdx-thumbnail'), loaded?.thumbnail);
     card.querySelector('.slot-title').textContent = state.titles[slot] || '…';
+    // Three lines: the article, what it does to the sound, and the trust
+    // signal behind that. The sound line is held (blank) while loading, so the
+    // card keeps its height.
     let text = 'Reading the article…';
+    let sound = '\u00a0';
     if (state.failed.has(slot)) text = 'Couldn’t load. Tap to choose again.';
-    else if (loaded) {
-      const { signal, sound } = readout(slot, loaded);
-      text = `${signal} · ${sound}`;
-    }
+    else if (loaded) ({ signal: text, sound } = readout(slot, loaded));
     card.querySelector('.slot-readout').textContent = text;
+    card.querySelector('.slot-sound').textContent = sound === '\u00a0' ? sound : sound.charAt(0).toUpperCase() + sound.slice(1);
     // Trending only matters to the effect, so only its card shows it.
     const trending = slot === 'effect' && Boolean(loaded?.trending);
     card.querySelector('.slot-trend').hidden = !trending;
@@ -372,19 +379,27 @@ function renderSlots() {
     line.querySelector('.spinner')?.remove();
     line.querySelector('.cdx-icon').hidden = loading;
     if (loading) line.prepend(Object.assign(document.createElement('span'), { className: 'spinner' }));
-    card.setAttribute('aria-label', `${LABELS[slot]}: ${state.titles[slot]}. ${text}${trending ? ', trending' : ''}. Change article.`);
+    const heard = sound.trim() ? `, ${sound}` : '';
+    card.setAttribute('aria-label', `${LABELS[slot]}: ${state.titles[slot]}. ${text}${heard}${trending ? ', trending' : ''}. Change article.`);
   });
 }
 
 function renderCredits() {
+  const picture = MOOD_PICTURES[state.mood];
   const links = SLOTS.map((s) => {
     const title = state.titles[s] || '';
     // The Attribution API's link keeps its wprov tag, so Wikipedia can count the visit.
     const loaded = state.articles[s]?.title === title ? state.articles[s] : null;
     return `<a href="${loaded?.link || articleUrl(title)}" target="_blank" rel="noopener">${escapeHtml(title)}</a>`;
   });
-  $('credits').innerHTML = `This instrument is made from the Wikipedia articles ${links.slice(0, 3).join(', ')} and ${links[3]}. Article data from Wikipedia, available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>. The painting is inspired by <a href="https://en.wikipedia.org/wiki/Broadway_Boogie_Woogie" target="_blank" rel="noopener"><i>Broadway Boogie Woogie</i></a> by <a href="https://en.wikipedia.org/wiki/Piet_Mondrian" target="_blank" rel="noopener">Piet Mondrian</a>.`;
+  $('credits').innerHTML = `This instrument is made from the Wikipedia articles ${links.slice(0, 3).join(', ')} and ${links[3]}. Article data from Wikipedia, available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>. The painting is inspired by <a href="https://en.wikipedia.org/wiki/Broadway_Boogie_Woogie" target="_blank" rel="noopener"><i>Broadway Boogie Woogie</i></a> by <a href="https://en.wikipedia.org/wiki/Piet_Mondrian" target="_blank" rel="noopener">Piet Mondrian</a>. Mood picture: <a href="${commonsPage(picture.file)}" target="_blank" rel="noopener">${escapeHtml(picture.alt)}</a> by ${escapeHtml(picture.author)}, ${pictureLicence(picture)}, from Wikimedia Commons.`;
 }
+
+/** A picture's licence as a phrase: 'available under CC BY 2.0' (linked), or 'in the public domain'. */
+const pictureLicence = (p) =>
+  p.license === 'Public domain'
+    ? 'in the public domain'
+    : `available under <a href="${p.licenseUrl}" target="_blank" rel="noopener">${p.license}</a>`;
 
 function escapeHtml(text) {
   return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -491,7 +506,7 @@ function openPicker(slot) {
   $('picker-title').textContent = LABELS[slot];
   $('picker-hint').textContent = HINTS[slot];
   $('picker-search').value = '';
-  $('picker-results').replaceChildren();
+  showResults([], '');
   $('picker').showModal();
   $('picker-search').focus();
 }
@@ -501,37 +516,76 @@ function choose(title) {
   if (title && pickerSlot) setSlot(pickerSlot, title);
 }
 
+// The picker's search is a Codex TypeaheadSearch: suggestions drop down in a
+// menu as you type. Focus stays in the field; the arrow keys move a
+// highlight through the suggestions (announced through
+// aria-activedescendant), Enter picks the highlighted one, or the first,
+// and Escape closes the menu.
+let suggestions = []; // the titles in the menu, in order
+let highlighted = -1;
+
+function openMenu(open) {
+  $('picker-menu').hidden = !open;
+  $('picker-typeahead').classList.toggle('cdx-typeahead-search--expanded', open);
+  $('picker-search').setAttribute('aria-expanded', String(open));
+  if (open) fitMenu();
+}
+
+/** Keeps the menu inside the window: it scrolls within whatever room is left below the field. */
+function fitMenu() {
+  const list = $('picker-results');
+  if ($('picker-menu').hidden) return;
+  const room = window.innerHeight - list.getBoundingClientRect().top - 16;
+  list.style.maxHeight = `${Math.max(120, Math.min(416, room))}px`;
+}
+window.addEventListener('resize', fitMenu);
+
+function highlight(index) {
+  highlighted = index;
+  const items = $('picker-results').querySelectorAll('[role="option"]');
+  items.forEach((li, i) => li.classList.toggle('cdx-menu-item--highlighted', i === index));
+  const active = items[index];
+  if (active) {
+    $('picker-search').setAttribute('aria-activedescendant', active.id);
+    active.scrollIntoView({ block: 'nearest' });
+  } else $('picker-search').removeAttribute('aria-activedescendant');
+}
+
+/** A message in the menu instead of suggestions (no matches, or no connection). */
+function menuMessage(text) {
+  suggestions = [];
+  $('picker-results').innerHTML = `<li class="cdx-menu-item cdx-menu-item--disabled" role="presentation"><span class="cdx-menu-item__content cdx-typeahead-search__menu-message cdx-typeahead-search__menu-message--has-thumbnail"><span class="cdx-typeahead-search__menu-message__text">${escapeHtml(text)}</span></span></li>`;
+  highlight(-1);
+  openMenu(true);
+}
+
 function showResults(results, text) {
   const list = $('picker-results');
   list.replaceChildren();
-  if (!results.length && text) {
-    list.innerHTML = `<li class="empty">No articles start with “${escapeHtml(text)}”.</li>`;
-    return;
-  }
-  // Codex Menu Items, each with a thumbnail and description. Codex's menu
-  // highlights the item under the pointer or focus; so do we.
-  results.forEach((r) => {
+  suggestions = results.map((r) => r.title);
+  highlight(-1);
+  if (!text) return openMenu(false);
+  if (!results.length) return menuMessage(`No articles start with “${text}”.`);
+  // Codex Menu Items, each with a thumbnail and description.
+  results.forEach((r, i) => {
     const li = document.createElement('li');
     li.className = 'cdx-menu-item cdx-menu-item--enabled cdx-menu-item--has-description';
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'cdx-menu-item__content';
-    button.innerHTML = `<span class="cdx-thumbnail cdx-menu-item__thumbnail">${THUMBNAIL}</span>
-      <span class="cdx-menu-item__text"><span class="cdx-menu-item__text__label"><bdi></bdi></span><span class="cdx-menu-item__text__description"><bdi></bdi></span></span>`;
-    setThumbnail(button.querySelector('.cdx-thumbnail'), r.thumbnail);
-    button.querySelector('.cdx-menu-item__text__label bdi').textContent = r.title;
-    button.querySelector('.cdx-menu-item__text__description bdi').textContent = r.description;
-    button.addEventListener('click', () => choose(r.title));
-    const highlight = (on) => li.classList.toggle('cdx-menu-item--highlighted', on);
-    button.addEventListener('pointerenter', () => highlight(true));
-    button.addEventListener('pointerleave', () => highlight(document.activeElement === button));
-    button.addEventListener('focus', () => highlight(true));
-    button.addEventListener('blur', () => highlight(false));
-    button.addEventListener('pointerdown', () => li.classList.add('cdx-menu-item--active'));
-    button.addEventListener('pointerup', () => li.classList.remove('cdx-menu-item--active'));
-    li.append(button);
+    li.id = `picker-option-${i}`;
+    li.setAttribute('role', 'option');
+    li.innerHTML = `<span class="cdx-menu-item__content"><span class="cdx-thumbnail cdx-menu-item__thumbnail">${THUMBNAIL}</span>
+      <span class="cdx-menu-item__text"><span class="cdx-menu-item__text__label"><bdi></bdi></span><span class="cdx-menu-item__text__description"><bdi></bdi></span></span></span>`;
+    setThumbnail(li.querySelector('.cdx-thumbnail'), r.thumbnail);
+    li.querySelector('.cdx-menu-item__text__label bdi').textContent = r.title;
+    li.querySelector('.cdx-menu-item__text__description bdi').textContent = r.description;
+    li.addEventListener('pointerenter', () => highlight(i));
+    // Keep focus in the field while pressing an item.
+    li.addEventListener('pointerdown', (e) => { e.preventDefault(); li.classList.add('cdx-menu-item--active'); });
+    li.addEventListener('pointerup', () => li.classList.remove('cdx-menu-item--active'));
+    li.addEventListener('pointerleave', () => li.classList.remove('cdx-menu-item--active'));
+    li.addEventListener('click', () => choose(r.title));
     list.append(li);
   });
+  openMenu(true);
 }
 
 function setUpPicker() {
@@ -546,16 +600,34 @@ function setUpPicker() {
       try {
         showResults(await search(text, searchAbort.signal), text);
       } catch (e) {
-        if (e.name !== 'AbortError') $('picker-results').innerHTML = '<li class="empty">Couldn’t search. Check your connection.</li>';
+        if (e.name !== 'AbortError') menuMessage('Couldn’t search. Check your connection.');
       }
     }, 200);
   });
   input.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    const first = $('picker-results').querySelector('.cdx-menu-item__text__label');
-    choose(first ? first.textContent : input.value.trim());
+    const open = !$('picker-menu').hidden;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!suggestions.length) return;
+      e.preventDefault();
+      if (!open) openMenu(true);
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      highlight((highlighted + step + suggestions.length + (highlighted < 0 && step < 0 ? 1 : 0)) % suggestions.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      choose(suggestions[Math.max(0, highlighted)] ?? input.value.trim());
+    } else if (e.key === 'Escape') {
+      // The first Escape closes the menu, the next the dialog. (Done here:
+      // once the first is stopped, Chrome ignores the next one otherwise.)
+      e.preventDefault();
+      if (open) {
+        openMenu(false);
+        highlight(-1);
+      } else $('picker').close();
+    }
   });
+  // The menu closes when the field loses focus (pressing an item keeps it), and comes back on focus.
+  input.addEventListener('blur', () => openMenu(false));
+  input.addEventListener('focus', () => input.value.trim() && $('picker-results').children.length && openMenu(true));
   $('picker-surprise').addEventListener('click', () => {
     $('picker').close();
     surprise([pickerSlot]);
@@ -597,13 +669,16 @@ function setUpTuning() {
   });
   knobs.mood = knob($('mood'), {
     count: MOODS.length,
-    textPointer: true, // the mood's name is the knob's pointer
+    cyclic: true, // all the way round: the eight dots evenly spaced, Spooky beside Dreamy
+    picture: (i) => MOOD_PICTURES[MOODS[i].id], // a picture for each mood, in the knob's face
     label: (i) => MOODS[i].name,
     onTurn: (i) => {
       retune({ mood: MOODS[i].id });
       strum();
     },
   });
+  // Fetch every mood's picture now, so turning the knob never waits for one.
+  Object.values(MOOD_PICTURES).forEach(({ src }) => (new Image().src = src));
   const octave = (step) => {
     retune({ shift: state.shift + step });
     preview();
