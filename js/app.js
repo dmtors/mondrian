@@ -3,6 +3,7 @@ import { KEYS as KEY_NAMES, MOODS, OCTAVE_SHIFTS, DEFAULT_KEY, DEFAULT_MOOD, ton
 import { knob } from './knob.js';
 import { MOOD_PICTURES, commonsPage } from './mood-pictures.js';
 import { infinity } from './infinity.js';
+import { KNOB_MARKUP, SCREEN_MARKUP, drawPedal } from './pedal.js';
 import { Synth, SoundMap, soundOf } from './synth.js';
 import { articleSignals, search, articleUrl, randomArticle, SURPRISES, STARTER } from './wiki.js';
 
@@ -352,22 +353,26 @@ function renderSlots() {
   const container = $('slots');
   if (!container.children.length) {
     SLOTS.forEach((slot) => {
-      // A Codex Card (a link card, as it opens the picker): the article as its
-      // title; the sound ('Muffled filter') and the trust signal behind it as
-      // supporting text; a Codex Info Chip when the effect is trending; and
-      // the thumbnail at the end (Codex's inline-end position).
+      // A Codex Card (a link card, as it opens the picker), styled as a pedal:
+      // the article's lead image fills it, and a bordered panel over the
+      // image holds the article as its title, the sound ('Muffled filter')
+      // and the trust signal behind it, a Codex Info Chip when the effect is
+      // trending, and the pedal face (pedal.js): the sound drawn on a
+      // display, and a knob beside the sound it sets.
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'cdx-card cdx-card--is-link slot';
       card.dataset.slot = slot;
       card.innerHTML = `
-        <span class="cdx-card__text">
-          <span class="cdx-card__text__title slot-title"></span>
-          <span class="cdx-card__text__supporting-text slot-sound"></span>
-          <span class="cdx-card__text__supporting-text slot-signal">${SIGNAL_ICONS[slot]}<span class="slot-readout"></span></span>
-        </span>
-        <span class="cdx-info-chip cdx-info-chip--warning slot-trend" hidden>${TRENDING_ICON}<span class="cdx-info-chip__text">Trending</span></span>
-        <span class="cdx-card__thumbnail cdx-thumbnail">${THUMBNAIL}</span>`;
+        <span class="pedal-panel">
+          ${SCREEN_MARKUP}
+          <span class="cdx-card__text">
+            <span class="cdx-card__text__title slot-title"></span>
+            <span class="cdx-card__text__supporting-text slot-sound">${KNOB_MARKUP}<span class="slot-sound-text"></span></span>
+            <span class="cdx-card__text__supporting-text slot-signal">${SIGNAL_ICONS[slot]}<span class="slot-readout"></span></span>
+          </span>
+          <span class="cdx-info-chip cdx-info-chip--warning slot-trend" hidden>${TRENDING_ICON}<span class="cdx-info-chip__text">Trending</span></span>
+        </span>`;
       card.addEventListener('click', () => openPicker(slot));
       container.append(card);
     });
@@ -377,7 +382,10 @@ function renderSlots() {
     const loaded = state.articles[slot]?.title === state.titles[slot] ? state.articles[slot] : null;
     const loading = state.loading.has(slot);
     card.classList.toggle('loading', loading);
-    setThumbnail(card.querySelector('.cdx-thumbnail'), loaded?.thumbnail);
+    // The article's lead image fills the card, behind the panel.
+    const image = loaded?.thumbnail ? `url("${loaded.thumbnail.replace(/"/g, '%22')}")` : '';
+    if (card.style.backgroundImage !== image) card.style.backgroundImage = image;
+    card.classList.toggle('has-image', Boolean(image));
     card.querySelector('.slot-title').textContent = state.titles[slot] || '…';
     // Three lines: the article, what it does to the sound, and the trust
     // signal behind that. The sound line is held (blank) while loading, so the
@@ -387,8 +395,10 @@ function renderSlots() {
     if (state.failed.has(slot)) text = 'Couldn’t load. Tap to choose again.';
     else if (loaded) ({ signal: text, sound } = readout(slot, loaded));
     card.querySelector('.slot-readout').textContent = text;
-    card.querySelector('.slot-sound').textContent = sound === '\u00a0' ? sound : sound.charAt(0).toUpperCase() + sound.slice(1);
+    card.querySelector('.slot-sound-text').textContent = sound === '\u00a0' ? sound : sound.charAt(0).toUpperCase() + sound.slice(1);
     // Trending only matters to the effect, so only its card shows it.
+    // The pedal face: the knob on the sound line, the sound drawn on the display (see pedal.js).
+    drawPedal(card, slot, state.failed.has(slot) ? null : loaded);
     const trending = slot === 'effect' && Boolean(loaded?.trending);
     card.querySelector('.slot-trend').hidden = !trending;
     // While loading, a spinner stands in for the signal's icon.

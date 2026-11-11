@@ -42,7 +42,8 @@ async function trustSignals(title) {
 export async function articleSignals(title) {
   const key = title.trim().toLowerCase();
   if (cache.has(key)) return cache.get(key);
-  const data = await query({ redirects: '1', titles: title, prop: 'pageimages', piprop: 'thumbnail', pithumbsize: '120' });
+  // 640px: the image fills the whole card behind its panel.
+  const data = await query({ redirects: '1', titles: title, prop: 'pageimages', piprop: 'thumbnail', pithumbsize: '640' });
   const page = data.query?.pages?.[0];
   if (!page || page.missing || page.invalid) return null;
   const signals = await trustSignals(page.title);

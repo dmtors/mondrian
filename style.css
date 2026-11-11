@@ -25,6 +25,20 @@
   }
 }
 
+/* Focus is dark grey, never blue: Codex's focus colours (rings on inputs,
+   cards, the knob and slider) take the emphasized border colour, in both
+   themes. */
+:root {
+  --border-color-progressive--focus: var(--border-color-emphasized);
+  --box-shadow-color-progressive--focus: var(--border-color-emphasized);
+  --outline-color-progressive--focus: var(--border-color-emphasized);
+}
+:focus-visible { outline-color: var(--border-color-emphasized); }
+/* And a click leaves no ring behind: Codex rings a button on any focus, so
+   after a click it stays ringed. Only keyboard focus keeps the ring. */
+.cdx-button:enabled:focus:not(:focus-visible):not(:active):not(.cdx-button--is-active) { border-color: var(--border-color-base); box-shadow: none; }
+.cdx-button--weight-quiet:enabled:focus:not(:focus-visible):not(:active):not(.cdx-button--is-active) { border-color: var(--border-color-transparent); }
+
 * { box-sizing: border-box; }
 
 html, body { margin: 0; }
@@ -132,7 +146,7 @@ a:visited { color: var(--color-visited); }
 /* The title with the icon buttons on its row, then the description. */
 .bar { display: flex; flex-direction: column; gap: var(--spacing-25); }
 .title-row { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-75); }
-.tagline { color: var(--color-subtle); }
+.tagline { color: var(--color-base); }
 /* Quiet icon buttons: nudged so the last glyph lines up with the panel's edge. */
 .actions { display: flex; gap: var(--spacing-25); margin-right: calc(-1 * var(--spacing-50)); }
 
@@ -169,18 +183,16 @@ a:visited { color: var(--color-visited); }
   cursor: pointer;
 }
 .slot .cdx-card__text { flex: 1; min-width: 0; }
-/* The thumbnail at the end, as Codex Card's inline-end position (which this Codex's CSS doesn't ship yet): its gap on the other side. */
-.slot .cdx-card__thumbnail.cdx-thumbnail { margin-right: 0; margin-left: var(--spacing-75); }
 /* Dense: no gaps between the three lines (Codex spaces the supporting text apart). */
 .slot .cdx-card__text__supporting-text { margin-top: 0; padding-top: 0; } /* Codex spaces it with either, by version */
 .slot-signal .cdx-icon[hidden] { display: none; }
-.slot-signal { color: var(--color-subtle); } /* the third line: the trust signal behind the sound above it */
-.slot-signal { display: flex; align-items: flex-start; gap: var(--spacing-25); min-width: 0; }
+.slot-signal { color: var(--color-base); } /* the third line: the trust signal behind the sound above it, in the cards' dark grey */
+.slot-signal, .slot-sound { display: flex; align-items: flex-start; gap: var(--spacing-25); min-width: 0; }
 /* The icon centred on the first line, however many the text wraps to. */
-.slot-signal .cdx-icon { margin-top: calc((var(--line-height-small) - var(--size-icon-small)) / 2); }
+.slot-signal .cdx-icon, .slot-sound .pedal-knob { margin-top: calc((var(--line-height-small) - var(--size-icon-small)) / 2); }
 .slot-signal .spinner { flex: none; margin-top: calc((var(--line-height-small) - var(--size-icon-x-small)) / 2); }
 .slot-signal .cdx-icon { flex: none; color: inherit; } /* the icon in the line's colour */
-.slot-trend { flex: none; margin-left: var(--spacing-75); }
+.slot-trend { flex: none; }
 .slot-trend[hidden] { display: none; }
 .slot.loading .cdx-card__text { opacity: 0.5; }
 
@@ -193,6 +205,93 @@ a:visited { color: var(--color-visited); }
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Each article card is styled as a pedal: the article's lead image fills
+   the card, and a panel sits over it, inset by a narrow frame of the image.
+   The panel holds, on the left, the pedal face, then the text (see pedal.js):
+   a knob turned to the article's value and a dark display drawing the slot's
+   sound, side by side, the same height, centred on the text. The display is
+   a device screen, so it stays dark in both themes. With no lead image, the
+   card shows Codex's neutral background. */
+/* Every border on the article and control cards: dark and 1px. */
+.slot.cdx-card, .tuning > .control.cdx-card { border: var(--border-width-base) var(--border-style-base) var(--border-color-emphasized); }
+/* Hover, press and keyboard focus in the same dark grey (Codex's link card
+   uses blue). A click leaves no ring behind: only keyboard focus keeps one. */
+.slot.cdx-card--is-link:focus:not(:focus-visible) { border-color: var(--border-color-emphasized); box-shadow: none; }
+.slot.cdx-card--is-link:hover,
+.slot.cdx-card--is-link:focus-visible { border-color: var(--border-color-emphasized); box-shadow: 0 0 0 1px var(--border-color-emphasized); }
+.slot.cdx-card--is-link:active { border-color: var(--border-color-emphasized); box-shadow: inset 0 0 0 1px var(--border-color-emphasized); }
+.slot.cdx-card {
+  padding: var(--spacing-35);
+  background-color: var(--background-color-neutral);
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+.pedal-panel {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-start; /* everything from the top */
+  gap: var(--spacing-50);
+  min-width: 0;
+  padding: var(--spacing-35) var(--spacing-50);
+  background-color: var(--background-color-base);
+  border: var(--border-width-base) var(--border-style-base) var(--border-color-emphasized);
+  border-radius: var(--border-radius-base);
+}
+
+.pedal { display: contents; }
+/* The display: as wide as the card's three lines of text are tall, and as
+   tall as the panel's content, so it grows with the text if a line wraps. */
+.pedal-screen {
+  display: block;
+  flex: none;
+  align-self: stretch;
+  width: calc(3 * var(--line-height-small));
+  height: auto;
+  min-height: calc(3 * var(--line-height-small));
+  border-radius: var(--border-radius-base);
+  background-color: #141414;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14); /* an edge on a dark panel too */
+}
+.pedal-trace {
+  fill: none;
+  stroke: #f2f2f2;
+  stroke-width: 1.5;
+  stroke-linejoin: miter;
+  stroke-linecap: butt; /* square ends, like the knob's tick */
+  vector-effect: non-scaling-stroke;
+}
+/* The knob: the size of the signal icon below it, leading the sound line it
+   sets, its pointer turning from −135° (lowest) to 135° (highest) with --turn (0–1). */
+.pedal-knob {
+  flex: none;
+  position: relative;
+  box-sizing: border-box;
+  width: var(--size-icon-small);
+  height: var(--size-icon-small);
+  border-radius: var(--border-radius-circle);
+  background-color: var(--background-color-base);
+  border: var(--border-width-base) var(--border-style-base) var(--border-color-emphasized);
+  transform: rotate(calc(-135deg + var(--turn, 0) * 270deg));
+  transition: transform var(--transition-duration-medium) cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.pedal-knob-pointer {
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 0; /* touching the rim */
+  width: 2px;
+  height: 6px;
+  background-color: var(--color-base);
+}
+@media (prefers-reduced-motion: reduce) { .pedal-knob { transition: none; } }
+/* On a narrow panel (a phone), a smaller display and knob leave the text room. */
+/* @container panel (max-width: 420px) {
+  .pedal-screen { width: 48px; height: 28px; }
+  .pedal-knob { width: 28px; height: 28px; }
+  .pedal-knob-pointer { top: 2px; height: 8px; }
+} */
 
 /* Hidden halves of a Codex Thumbnail (image or placeholder). */
 .cdx-thumbnail [hidden] { display: none; }
@@ -213,7 +312,7 @@ a:visited { color: var(--color-visited); }
 
 /* The Mood knob (see knob.js): notches round a face and the mood's name as
    its pointer, snapping between them. The current notch and the name are the
-   base colour, and turn progressive on hover. */
+   base colour. */
 .knob {
   width: min(100%, 112px); /* as big as its card allows */
   aspect-ratio: 1;
@@ -230,17 +329,16 @@ a:visited { color: var(--color-visited); }
 .knob svg { position: relative; }
 .knob .picture {
   position: absolute;
-  inset: 25%;
+  inset: 20%;
   overflow: hidden;
   border-radius: var(--border-radius-circle);
   border: var(--border-width-base) var(--border-style-base) var(--border-color-emphasized);
 }
 .knob .picture img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.knob:has(.picture) .face { fill: none; transition: stroke var(--transition-duration-base); }
-.knob:has(.picture):is(:hover, .turning, :focus-visible) .face { stroke: var(--border-color-progressive); }
+.knob:has(.picture) .face { fill: none; }
 .knob svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.knob .tick { fill: var(--border-color-subtle); transition: fill var(--transition-duration-base); }
-.knob .tick.on { fill: var(--color-base); }
+.knob .tick { fill: transparent; stroke: var(--border-color-emphasized); stroke-width: 1; vector-effect: non-scaling-stroke; transition: fill var(--transition-duration-base); } /* unlit: a dark grey ring */
+.knob .tick.on { fill: var(--color-base); stroke: none; }
 .knob .face {
   fill: var(--background-color-base);
   stroke: var(--border-color-emphasized);
@@ -260,14 +358,15 @@ a:visited { color: var(--color-visited); }
   font-weight: var(--font-weight-bold);
   transition: fill var(--transition-duration-base);
 }
-.knob:hover :is(.tick.on, .pointer-text), .knob.turning :is(.tick.on, .pointer-text) { fill: var(--color-progressive); }
-/* Keyboard focus: no ring round the whole knob; the dot and name turn progressive, as on hover. */
+/* Hover, turning and keyboard focus: the face's ring thickens, still dark
+   grey, as the cards' border does (no outline round the whole knob). */
+.knob .face { transition: stroke-width var(--transition-duration-base), stroke var(--transition-duration-base); }
+.knob:is(:hover, .turning, :focus-visible) .face { stroke-width: var(--border-width-thick); }
 .knob:focus-visible { outline: none; }
-.knob:focus-visible :is(.tick.on, .pointer-text) { fill: var(--color-progressive); }
 
 /* Pitch (see infinity.js): a thumb that slides round an infinity-shaped
    track, snapping notch to notch, with the note inside it. The thumb is
-   inverted, and all progressive on hover. */
+   inverted. */
 .infinity {
   position: relative;
   width: 100%;
@@ -280,7 +379,7 @@ a:visited { color: var(--color-visited); }
 }
 .infinity.sliding { cursor: grabbing; }
 .infinity svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.infinity .track { fill: none; stroke: var(--border-color-emphasized); stroke-width: var(--border-width-base); vector-effect: non-scaling-stroke; }
+.infinity .track { fill: none; stroke: var(--border-color-emphasized); stroke-width: var(--border-width-base); vector-effect: non-scaling-stroke; transition: stroke-width var(--transition-duration-base), stroke var(--transition-duration-base); }
 .infinity .tick { fill: var(--border-color-emphasized); }
 .infinity .thumb {
   position: absolute;
@@ -301,12 +400,11 @@ a:visited { color: var(--color-visited); }
   transition-duration: 0.1s, 0.1s, var(--transition-duration-base), var(--transition-duration-base);
   transition-timing-function: ease-out;
 }
-/* Keyboard focus: no ring round the whole track; the thumb turns progressive, as on hover. */
+/* Hover, sliding and keyboard focus: the track thickens, still dark grey,
+   as the cards' border does; the thumb stays dark (no outline round the
+   whole slider). */
+.infinity:is(:hover, .sliding, :focus-visible) .track { stroke-width: var(--border-width-thick); }
 .infinity:focus-visible { outline: none; }
-.infinity:hover .thumb, .infinity.sliding .thumb, .infinity:focus-visible .thumb {
-  background-color: var(--background-color-progressive);
-  border-color: var(--border-color-progressive);
-}
 
 /* Octave: Codex icon buttons that show where the octave is by their sizes
    (see sizeButton() in app.js). Each sits in a large button's space, so the
@@ -332,7 +430,7 @@ a:visited { color: var(--color-visited); }
   .knob .pointer, .knob .tick, .knob .face, .knob .pointer-text, .infinity .thumb { transition: none; }
 }
 
-.hint { color: var(--color-subtle); }
+.hint { color: var(--color-base); }
 kbd {
   font-family: var(--font-family-monospace);
   font-size: var(--font-size-x-small);
@@ -348,7 +446,7 @@ kbd {
 .credits {
   margin-top: auto;
   padding-top: var(--spacing-100);
-  color: var(--color-subtle);
+  color: var(--color-base);
   border-top: var(--border-width-base) var(--border-style-base) var(--border-color-divider);
 }
 
@@ -407,7 +505,17 @@ dialog .cdx-dialog__body { display: flex; flex-direction: column; gap: var(--spa
 .cdx-typeahead-search__menu .cdx-menu__listbox { max-height: 26rem; } /* and never past the window: see fitMenu() in app.js */
 .cdx-menu-item__text { min-width: 0; }
 
-.wide { width: 100%; }
+/* Surprise me: a Codex button the full width of the dialog (past Codex's
+   maximum button width), in Codex's dark (inverted) colours. */
+.wide { width: 100%; max-width: none; }
+.cdx-button.wide:enabled {
+  color: var(--color-inverted);
+  background-color: var(--background-color-inverted);
+  border-color: var(--background-color-inverted);
+}
+.cdx-button.wide:enabled:hover { background-color: var(--color-base--hover); border-color: var(--color-base--hover); }
+.cdx-button.wide:enabled:active { background-color: var(--color-emphasized); }
+.cdx-button.wide:enabled:focus:not(:focus-visible):not(:active) { border-color: var(--background-color-inverted); } /* after a click, as at rest */
 
 /* Toast: a Codex Message (notice), floating at the bottom. */
 .toast {
@@ -443,3 +551,4 @@ small,
   font-size: var(--font-size-small);
   line-height: var(--line-height-small);
 }
+
