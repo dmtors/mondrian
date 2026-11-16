@@ -81,12 +81,12 @@ export class Synth {
     this.sound = sound;
   }
 
-  /** One note, attack to silence. */
-  strike(midi) {
+  /** One note, attack to silence: now, or at audio time [when] (the sequencer's). */
+  strike(midi, when = null) {
     if (!this.sound) return;
     this.wake();
     const { ctx, sound } = this;
-    const t = ctx.currentTime + 0.005;
+    const t = Math.max(when ?? 0, ctx.currentTime) + 0.005;
     const attack = 0.006;
     const length = attack + sound.decaySec * 1.6 + 0.03;
 

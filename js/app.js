@@ -5,6 +5,7 @@ import { MOOD_PICTURES, commonsPage } from './mood-pictures.js';
 import { infinity } from './infinity.js';
 import { KNOB_MARKUP, SCREEN_MARKUP, drawPedal } from './pedal.js';
 import { Synth, SoundMap, soundOf } from './synth.js';
+import { Sequencer, STEPS, TEMPO, randomLoop, encodeLoop, decodeLoop, clampTempo, tempoText, editStep, notesOf } from './sequencer.js';
 import { articleSignals, search, articleUrl, randomArticle, SURPRISES, STARTER } from './wiki.js';
 
 const LABELS = { waveform: 'Waveform', filter: 'Filter', envelope: 'Envelope', effect: 'Effect' };
@@ -72,6 +73,7 @@ const state = {
   mood: DEFAULT_MOOD,
   shift: 0, // octaves up or down from where the key starts
   tones: tonesFor(DEFAULT_KEY, DEFAULT_MOOD), // [register][colour]: the MIDI note each size and colour plays
+  loopShared: false, // whether the link carries the loop and tempo (once played or changed)
 };
 
 const titleList = () => SLOTS.map((s) => state.titles[s]);
@@ -94,6 +96,11 @@ function writeHash() {
     params.set('m', state.mood);
   }
   if (state.shift) params.set('o', String(state.shift));
+  // The loop and its tempo, once it has been played or changed.
+  if (state.loopShared) {
+    params.set('q', encodeLoop(sequencer.loop));
+    params.set('t', String(sequencer.tempo));
+  }
   history.replaceState(null, '', `#${params.toString().replace(/\+/g, '%20')}`);
 }
 
@@ -514,6 +521,12 @@ function setUpPlaying() {
       $(octave).click(); // does nothing at the limit, where the button is disabled
       return;
     }
+    // Space plays or stops the loop (unless a button or slider has focus, where Space is its own).
+    if (e.code === 'Space' && !e.target.closest?.('button, [role="slider"], a')) {
+      e.preventDefault();
+      setPlaying(!sequencer.playing);
+      return;
+    }
     const note = KEY_NOTES.get(e.code);
     if (!note) return;
     e.preventDefault();
@@ -673,12 +686,19 @@ function setUpPicker() {
 
 /** Lets a new sound be heard: a quick climb from the large blocks to the squares. */
 const PREVIEW = [[0, 'yellow'], [1, 'yellow'], [2, 'red'], [2, 'blue'], [3, 'yellow']];
+// The controls each play a little preview of what they changed, unless the
+// loop is playing: then the loop is the preview, and an extra note would
+// trip up its rhythm.
+const looping = () => sequencer.playing;
+
 function preview() {
+  if (looping()) return;
   PREVIEW.forEach(([register, colour], i) => setTimeout(() => strikeNote({ register, colour }), i * 110));
 }
 
 /** The squares' four colours in turn, quickly: how a mood sounds. */
 function strum() {
+  if (looping()) return;
   COLOURS.forEach((colour, i) => setTimeout(() => strikeNote({ register: 3, colour }), i * 45));
 }
 
@@ -699,7 +719,7 @@ function setUpTuning() {
     label: (i) => KEY_NAMES[i],
     onTurn: (key) => {
       retune({ key });
-      strikeNote({ register: 3, colour: 'yellow' });
+      if (!looping()) strikeNote({ register: 3, colour: 'yellow' });
     },
   });
   knobs.mood = knob($('mood'), {
@@ -720,6 +740,224 @@ function setUpTuning() {
   };
   $('octave-down').addEventListener('click', () => octave(-1));
   $('octave-up').addEventListener('click', () => octave(1));
+}
+
+// ---------- Loop ----------
+
+// The sequencer plays each step's notes as the painting would (their sizes
+// and colours, in the current tuning) and presses every shape that plays
+// them, so the painting dances along. The step playing lights up in the
+// piano roll.
+const sequencer = new Sequencer({
+  getContext: () => {
+    synth.wake();
+    return synth.ctx;
+  },
+  play: (note, when) => synth.strike(state.tones[note.register][COLOURS.indexOf(note.colour)], when),
+  onStep: (index, delayMs) => setTimeout(() => showStep(index), delayMs),
+});
+
+function showStep(index) {
+  if (!sequencer.playing) return;
+  $('loop').querySelectorAll('.loop-step').forEach((el, i) => el.classList.toggle('now', i === index));
+  const notes = notesOf(sequencer.loop[index]);
+  if (notes.length && painting) press(painting.shapes.filter((s) => notes.some((n) => s.colour === n.colour && s.register === n.register)));
+}
+
+/**
+ * The piano roll: a column per step, and in it a cell per size's row
+ * (squares on top), a note's cell in its colour. The keyboard's cursor is a
+ * cell: [step, register].
+ */
+const loopCursor = { step: 0, register: 1 };
+function renderLoop() {
+  const playing = [...$('loop').children].findIndex((el) => el.classList.contains('now'));
+  $('loop').innerHTML = sequencer.loop
+    .map((step, i) => {
+      const cells = [3, 2, 1, 0]
+        .map((register) => {
+          const colour = step[register];
+          const cursor = i === loopCursor.step && register === loopCursor.register ? ' cursor' : '';
+          return colour ? `<span class="loop-cell loop-note${cursor}" data-paint="${colour}"></span>` : `<span class="loop-cell${cursor}"></span>`;
+        })
+        .join('');
+      return `<span class="loop-step${i === playing ? ' now' : ''}">${cells}</span>`;
+    })
+    .join('');
+}
+
+/** A step's notes, as the screen reader hears them. */
+const REGISTER_NAMES = ['large block', 'medium block', 'small block', 'square'];
+const describeCursor = () => {
+  const { step, register } = loopCursor;
+  const colour = sequencer.loop[step][register];
+  const notes = notesOf(sequencer.loop[step]);
+  return `Step ${step + 1}, ${REGISTER_NAMES[register]} row: ${colour || 'empty'}. The step plays ${notes.length ? notes.map((n) => `${n.colour} ${REGISTER_NAMES[n.register]}`).join(', ') : 'nothing'}.`;
+};
+
+/** Changes the loop to [loop] after editing the cell [index, register], plays that note so you hear it, and keeps it in the link. */
+function changeLoop(loop, index, register) {
+  sequencer.loop = loop;
+  Object.assign(loopCursor, { step: index, register });
+  renderLoop();
+  const colour = loop[index][register];
+  if (colour && !looping()) {
+    synth.wake();
+    synth.strike(state.tones[register][COLOURS.indexOf(colour)]);
+  }
+  $('loop').setAttribute('aria-label', `Loop steps. ${describeCursor()}`);
+  state.loopShared = true;
+  writeHash();
+}
+
+/** The loop with the note in cell [index, register] removed. */
+function withoutNote(loop, index, register) {
+  const next = loop.slice();
+  next[index] = next[index].slice();
+  next[index][register] = null;
+  return next;
+}
+
+/**
+ * Tapping the roll: the step under the finger, in the row under it. With
+ * ⌘ or Ctrl held, a click removes the note there, whatever its colour.
+ */
+function editAt(event) {
+  const column = event.target.closest('.loop-step');
+  if (!column) return;
+  const index = [...$('loop').children].indexOf(column);
+  const box = column.getBoundingClientRect();
+  const register = 3 - Math.min(3, Math.max(0, Math.floor(((event.clientY - box.top) / box.height) * 4)));
+  if (event.metaKey || event.ctrlKey) {
+    if (sequencer.loop[index][register]) changeLoop(withoutNote(sequencer.loop, index, register), index, register);
+    return;
+  }
+  changeLoop(editStep(sequencer.loop, index, register), index, register);
+}
+
+/** The keyboard on the roll: the arrows move between cells, Enter adds a note or changes its colour, Delete removes it. */
+function editByKey(e) {
+  const move = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+  const lift = { ArrowUp: 1, ArrowDown: -1 }[e.key];
+  const { step, register } = loopCursor;
+  if (move || lift) {
+    if (move) loopCursor.step = (step + move + STEPS) % STEPS;
+    else loopCursor.register = Math.min(3, Math.max(0, register + lift));
+    renderLoop();
+    $('loop').setAttribute('aria-label', `Loop steps. ${describeCursor()}`);
+  } else if (e.key === 'Enter') {
+    changeLoop(editStep(sequencer.loop, step, register), step, register);
+  } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (!sequencer.loop[step][register]) return;
+    changeLoop(withoutNote(sequencer.loop, step, register), step, register);
+  } else return;
+  e.preventDefault();
+  e.stopPropagation(); // the arrows and keys edit the loop, nothing else
+}
+
+function renderTempo() {
+  $('tempo').textContent = `${tempoText(sequencer.tempo)}bpm`;
+  $('tempo').setAttribute('aria-valuenow', String(sequencer.tempo));
+  $('tempo').setAttribute('aria-valuetext', `${tempoText(sequencer.tempo)} beats a minute`);
+  $('tempo-down').disabled = sequencer.tempo <= TEMPO.min;
+  $('tempo-up').disabled = sequencer.tempo >= TEMPO.max;
+}
+
+// Codex cdxIconPlay and cdxIconStop: the button shows the one it will do.
+const PLAY_ICON = '<path d="M16 9.5v1L6.5 16H5V4h1.5z"/>';
+const STOP_ICON = '<path d="M15 15H5V5h10z"/>';
+
+function setPlaying(on) {
+  if (on) {
+    if (!synth.sound) toast('Still reading the articles…');
+    sequencer.start();
+    state.loopShared = true;
+    writeHash();
+  } else {
+    sequencer.stop();
+    $('loop').querySelectorAll('.now').forEach((el) => el.classList.remove('now'));
+  }
+  const button = $('loop-play');
+  $('loop-play-icon').innerHTML = on ? STOP_ICON : PLAY_ICON;
+  button.setAttribute('aria-label', on ? 'Stop loop' : 'Play loop');
+  button.title = on ? 'Stop loop (Space)' : 'Play loop (Space)';
+}
+
+/** The loop and tempo a link carries, if any. */
+function loopFromHash() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  const loop = decodeLoop(params.get('q'));
+  const tempo = Number(params.get('t'));
+  if (loop) {
+    sequencer.loop = loop;
+    state.loopShared = true;
+  }
+  if (tempo) sequencer.tempo = clampTempo(tempo);
+  renderLoop();
+  renderTempo();
+}
+
+function setUpLoop() {
+  $('loop-play').addEventListener('click', () => setPlaying(!sequencer.playing));
+  $('loop-new').addEventListener('click', () => {
+    sequencer.loop = randomLoop();
+    renderLoop();
+    state.loopShared = true;
+    writeHash();
+    if (!sequencer.playing) setPlaying(true); // a new loop is for hearing
+  });
+  const setTempo = (bpm) => {
+    const next = clampTempo(bpm);
+    if (next === sequencer.tempo) return;
+    sequencer.tempo = next;
+    renderTempo();
+    state.loopShared = true;
+    writeHash();
+  };
+  // Half a beat a minute at a time; with Shift, five.
+  const tempo = (direction, big) => setTempo(sequencer.tempo + direction * (big ? TEMPO.bigStep : TEMPO.step));
+  $('tempo-down').addEventListener('click', (e) => tempo(-1, e.shiftKey));
+  $('tempo-up').addEventListener('click', (e) => tempo(1, e.shiftKey));
+  // Scrubbing: drag the number sideways, half a beat a minute every few
+  // pixels (with Shift, ten times as far), right for faster. It's a slider
+  // too: the arrow keys step it as − and + do.
+  const PX_PER_STEP = 4;
+  let scrub = null; // { x, from } while dragging
+  const readout = $('tempo');
+  readout.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    try { readout.setPointerCapture(e.pointerId); } catch {}
+    scrub = { x: e.clientX, from: sequencer.tempo };
+    readout.classList.add('scrubbing');
+    document.documentElement.classList.add('scrubbing'); // the ↔ cursor wherever the drag goes
+  });
+  readout.addEventListener('pointermove', (e) => {
+    if (!scrub) return;
+    const steps = Math.round((e.clientX - scrub.x) / PX_PER_STEP);
+    setTempo(scrub.from + steps * TEMPO.step * (e.shiftKey ? 10 : 1));
+  });
+  const endScrub = () => {
+    scrub = null;
+    readout.classList.remove('scrubbing');
+    document.documentElement.classList.remove('scrubbing');
+  };
+  readout.addEventListener('pointerup', endScrub);
+  readout.addEventListener('pointercancel', endScrub);
+  readout.addEventListener('keydown', (e) => {
+    const direction = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+    if (!direction) return;
+    e.preventDefault();
+    e.stopPropagation();
+    tempo(direction, e.shiftKey);
+  });
+  $('loop').addEventListener('pointerdown', (e) => {
+    e.preventDefault(); // no text selection or focus ring from a tap
+    editAt(e);
+  });
+  $('loop').addEventListener('keydown', editByKey);
+  $('loop').addEventListener('contextmenu', (e) => e.preventDefault()); // Ctrl-click removes a note on a Mac, not a menu
+  $('loop-play-icon').innerHTML = PLAY_ICON;
+  loopFromHash();
 }
 
 // ---------- Sharing ----------
@@ -753,6 +991,7 @@ function start() {
   setUpPlaying();
   setUpPicker();
   setUpTuning();
+  setUpLoop();
   $('reset').addEventListener('click', reset);
   $('new-sound').addEventListener('click', newSound);
   $('share').addEventListener('click', share);
@@ -765,6 +1004,7 @@ function start() {
   );
   window.addEventListener('hashchange', () => {
     setTuning(tuningFromHash());
+    loopFromHash();
     const titles = titlesFromHash();
     if (titles && !sameTitles(titles, titleList())) usePatch(titles);
   });
