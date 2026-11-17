@@ -18,8 +18,10 @@
   --paint-grey: #ede8dc;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
+/* Dark: when the theme is dark (data-theme on <html>, set by the head
+   script in index.html from the toggle, or from the system when it's on
+   System), as Codex's dark tokens are. */
+:root[data-theme="dark"] {
     --paint-grey: #6e6e6a;
     color-scheme: dark;
     /* Quieter than Codex's dark theme: borders muted toward the background,
@@ -35,7 +37,6 @@
     --color-emphasized: #d6d6d6; /* Codex: #f3f3f3 */
     --color-subtle: #8f8f8f; /* Codex: #a8a8a8 */
     --color-base--hover: #d6d6d6;
-  }
 }
 
 /* Focus is dark grey, never blue: Codex's focus colours (rings on inputs,
@@ -47,9 +48,7 @@
   --box-shadow-color-progressive--focus: var(--focus-color);
   --outline-color-progressive--focus: var(--focus-color);
 }
-@media (prefers-color-scheme: dark) {
-  :root { --focus-color: #8f8f8f; } /* brighter than dark mode's muted borders */
-}
+:root[data-theme="dark"] { --focus-color: #8f8f8f; } /* brighter than dark mode's muted borders */
 :focus-visible { outline-color: var(--focus-color); }
 /* And a click leaves no ring behind: Codex rings a button on any focus, so
    after a click it stays ringed. Only keyboard focus keeps the ring. */
@@ -469,21 +468,18 @@ a:visited { color: var(--color-visited); }
   }
 }
 
-/* The steps, a piano roll you can write in: sixteen columns, a little more
-   space between the four beats, and four rows, one per size, squares on
-   top. A note is a block in its colour, outlined dark like the cards. The
-   step playing gets a grey column; a row under the pointer shows where a
-   tap would put the note; keyboard focus outlines the step being edited. */
+/* The steps, a piano roll you can write in: sixteen columns and four rows,
+   one per size, squares on top, every cell 2px from its neighbours, across
+   and down, beats included. A note is a block in its colour; an empty
+   cell shows a dot. The step playing gets a dark bar under its column; the
+   cell under the pointer gets a dark outline inside it; keyboard focus
+   rings the cell being edited. */
 .loop {
   display: grid;
-  /* Sixteen equal steps, with a narrow empty column between each beat of four. */
-  --beat-gap: var(--spacing-25);
-  grid-template-columns:
-    repeat(4, minmax(0, 1fr)) var(--beat-gap)
-    repeat(4, minmax(0, 1fr)) var(--beat-gap)
-    repeat(4, minmax(0, 1fr)) var(--beat-gap)
-    repeat(4, minmax(0, 1fr));
-  column-gap: 2px;
+  /* Sixteen equal steps. Each step's 1px padding on either side makes the
+     2px between neighbouring cells. */
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  column-gap: 0;
   height: var(--size-400); /* four rows a finger can tell apart */
   cursor: pointer;
   touch-action: manipulation;
@@ -495,23 +491,29 @@ a:visited { color: var(--color-visited); }
 .loop-step {
   display: grid;
   grid-template-rows: repeat(4, minmax(0, 1fr));
-  row-gap: 4px;
-  padding: 2px 1px;
+  row-gap: 2px;
+  padding: 1px 1px 4px; /* 1px a side makes the 2px between cells; the bottom leaves room for the playing bar */
   border-radius: var(--border-radius-sharp);
   /* background-image: repeating-linear-gradient(to bottom, transparent 0 calc(25% - 1px), var(--border-color-subtle) calc(25% - 1px) 25%); faint row lines */
   background-size: 100% calc(100% - 4px);
   background-position: 0 2px;
   background-repeat: no-repeat;
-  transition: background-color var(--transition-duration-base);
 }
-/* Each beat after the first starts past its gap column; the rest follow on. */
-.loop-step:nth-child(5) { grid-column: 6; }
-.loop-step:nth-child(9) { grid-column: 11; }
-.loop-step:nth-child(13) { grid-column: 16; }
-@media (hover: hover) { .loop-step:hover { background-color: var(--background-color-interactive-subtle--hover); } }
-.loop-step.now { background-color: var(--background-color-interactive); transition: none; }
+/* The step playing: a dark 2px bar along the bottom of its whole column. */
+.loop-step.now { box-shadow: inset 0 -2px 0 var(--border-color-emphasized); }
 /* A cell per row; a note fills its cell, outlined dark like the cards. */
-.loop-cell { border-radius: var(--border-radius-sharp); }
+.loop-cell { border-radius: var(--border-radius-pill); }
+/* An empty cell: a small dot in its middle, so the grid shows where notes can go. */
+.loop-cell:not(.loop-note) { display: grid; place-items: center; }
+.loop-cell:not(.loop-note)::after {
+  content: '';
+  width: 3px;
+  height: 3px;
+  border-radius: var(--border-radius-circle);
+  background-color: var(--border-color-emphasized); /* the cards' dark grey */
+}
+/* The cell a click would change (see hoverAt in app.js): a dark 2px outline inside it. */
+.loop-cell.hover { box-shadow: inset 0 0 0 2px var(--border-color-emphasized); }
 /* The keyboard's cell: a dark ring round it. */
 .loop:focus-visible .loop-cell.cursor { box-shadow: 0 0 0 var(--border-width-thick) var(--focus-color); }
 .loop-note[data-paint="red"] { background-color: var(--paint-red); }
@@ -642,10 +644,23 @@ dialog .cdx-dialog__body { display: flex; flex-direction: column; gap: var(--spa
   transition-duration: var(--transition-duration-medium);
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
-/* Inverted, like a snackbar: Codex's inverted background and text, with no
-   edge or shadow (it stands out on its own). The icon keeps the notice's own
-   colour. */
-.toast.cdx-message { background-color: var(--background-color-inverted); color: var(--color-inverted); border-color: transparent; box-shadow: none; }
+/* The toast wears the other theme: on a light page, dark mode's base
+   background, text and notice icon; on a dark page, light mode's. So its
+   icon is always in the notice grey made for that background. No edge or
+   shadow; it stands out on its own. (The values are Codex's tokens from the
+   other theme's file, and this page's own dark text.) */
+:root[data-theme="light"] .toast {
+  --toast-background: #171717; /* dark --background-color-base */
+  --toast-color: #c4c4c4; /* dark --color-base, as this page dims it */
+  --toast-icon: #a8a8a8; /* dark --color-icon-notice */
+}
+:root[data-theme="dark"] .toast {
+  --toast-background: #fff; /* light --background-color-base */
+  --toast-color: #171717; /* light --color-base */
+  --toast-icon: #424242; /* light --color-icon-notice */
+}
+.toast.cdx-message { background-color: var(--toast-background); color: var(--toast-color); border-color: transparent; box-shadow: none; }
+.toast .cdx-message__icon--vue { color: var(--toast-icon); }
 
 /* Text size: every piece of text, headings aside, in Codex's Small style
    (its size and line height). Set on the text itself, not by remapping

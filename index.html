@@ -10,9 +10,30 @@
   <!-- Codex design tokens and component styles, with changes 1304941 and 1354777 applied (see vendor/codex/README.md).
        The dark tokens stack over the light ones when the system is dark, as Codex's own mode files do. -->
   <link rel="stylesheet" href="vendor/codex/theme-wikimedia-ui.css">
-  <link rel="stylesheet" href="vendor/codex/theme-wikimedia-ui-mode-dark.css" media="(prefers-color-scheme: dark)">
+  <link rel="stylesheet" href="vendor/codex/theme-wikimedia-ui-mode-dark.css" media="(prefers-color-scheme: dark)" id="dark-tokens">
   <link rel="stylesheet" href="vendor/codex/codex.style.css">
   <link rel="stylesheet" href="style.css">
+  <!-- The theme, before anything paints: the one chosen with the theme button
+       (kept in this browser), or the system's. Sets data-theme on <html> for
+       style.css, and switches Codex's dark tokens on or off to match. The
+       button itself is in app.js (setUpTheme). -->
+  <script>
+    (function () {
+      var choice = 'system';
+      try { choice = localStorage.getItem('mondrian-theme') || 'system'; } catch (e) {}
+      var system = matchMedia('(prefers-color-scheme: dark)');
+      window.applyTheme = function (c) {
+        choice = c;
+        var dark = c === 'dark' || (c === 'system' && system.matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.documentElement.dataset.themeChoice = c;
+        document.getElementById('dark-tokens').media = c === 'system' ? '(prefers-color-scheme: dark)' : dark ? 'all' : 'not all';
+        document.querySelector('meta[name="color-scheme"]').content = c === 'system' ? 'light dark' : dark ? 'dark' : 'light';
+      };
+      system.addEventListener('change', function () { if (choice === 'system') window.applyTheme('system'); });
+      window.applyTheme(choice);
+    })();
+  </script>
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
@@ -26,7 +47,7 @@
         <div class="title-row">
           <h1>Mondrian</h1>
           <nav class="actions" aria-label="Instrument">
-            <!-- Icons: Codex (@wikimedia/codex-icons) cdxIconReload, cdxIconDie, cdxIconLink, cdxIconInfo -->
+            <!-- Icons: Codex (@wikimedia/codex-icons) cdxIconReload, cdxIconDie, cdxIconLink, theme (below), cdxIconInfo -->
             <button type="button" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only" id="reset" title="Reset to default" aria-label="Reset to default">
               <span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1a8.98 8.98 0 016.999 3.343L17 2h2v5l-1 1h-5l-.001-2h2.746a7 7 0 101.184 5h2.016A9 9 0 1110 1"/></svg></span>
             </button>
@@ -35,6 +56,10 @@
             </button>
             <button type="button" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only" id="share" title="Copy link" aria-label="Copy link">
               <span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.862 7.453a4.353 4.353 0 016.167-.01l.707.706-1.414 1.414-.707-.707a2.355 2.355 0 00-3.335.005L4.354 11.81a2.725 2.725 0 003.842 3.868l.046-.046.715-.7 1.4 1.43-.715.698-.046.046A4.727 4.727 0 012.934 10.4z"/><path d="M10.405 2.894a4.726 4.726 0 016.662 6.707l-2.928 2.947a4.354 4.354 0 01-6.167.01l-.707-.707 1.414-1.415.707.707c.921.921 2.416.92 3.334-.004l2.928-2.948a2.727 2.727 0 00-3.843-3.868l-.761.746-1.4-1.428.713-.7z"/></svg></span>
+            </button>
+            <!-- Theme: System, Light or Dark in turn. Icons: Codex cdxIconHalfBright, cdxIconBright, cdxIconMoon (set by app.js) -->
+            <button type="button" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only" id="theme">
+              <span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true" id="theme-icon"></svg></span>
             </button>
             <button type="button" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only" id="open-about" title="How it works" aria-label="How it works">
               <span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 13h1v2H8v-2h1v-2H8V9h3zm0-6H9V5h2z"/><path d="M10 1a9 9 0 110 18 9 9 0 010-18m0 2a7 7 0 100 14 7 7 0 000-14"/></svg></span>
@@ -141,7 +166,7 @@
           <li><b>Effect</b>: the more recently it was updated, the more the note wobbles. A trending article shimmers.</li>
         </ul>
         <p>Each color is a note. Yellow is the home note, and red, blue and grey are the notes that go with it, so there are no wrong notes. Turn <b>Pitch</b> to move them all up or down, turn <b>Mood</b> (its picture shows the mood) to change which notes go together, from dreamy to spooky, and press <b>Octave</b> to move everything higher or lower. The same note lives all over the painting, and its size picks the octave: the squares on the streets are highest, then small blocks, medium blocks and large blocks, an octave lower each. White is quiet. Drag along a street to play a run.</p>
-        <p>Press <b>Play</b> under the controls to hear a loop: sixteen steps of random notes from the painting, drawn as a little piano roll in their colors (higher rows play higher). Tap the piano roll to write your own: tap an empty row to add a note (a step can play one in every row at once, as a chord), and tap a note to change its color (past grey, it goes), or hold <kbd>⌘</kbd> or <kbd>Ctrl</kbd> and click it to remove it. Change the tempo with <b>−</b> and <b>+</b> (half a beat a minute; hold Shift for five), or press the die for a new loop. Turning Pitch, Mood or Octave changes the loop as it plays.</p>
+        <p>Press <b>Play</b> under the controls to hear a loop: sixteen steps of random notes from the painting, drawn as a little piano roll in their colors (higher rows play higher). Tap the piano roll to write your own: tap an empty row to add a note (a step can play one in every row at once, as a chord), and tap a note to change its color (past grey, it goes), or hold <kbd>⌘</kbd> or <kbd>Ctrl</kbd> and click it to remove it. Change the tempo with <b>−</b> and <b>+</b> (half a beat a minute; hold <kbd>Shift</kbd> for five), or press the die for a new loop. Turning Pitch, Mood or Octave changes the loop as it plays.</p>
         <p>The four article titles decide where the streets and blocks go and how the squares are colored: the same articles always make the same painting.</p>
       </div>
     </form>

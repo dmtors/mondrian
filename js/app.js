@@ -770,6 +770,7 @@ function showStep(index) {
  * cell: [step, register].
  */
 const loopCursor = { step: 0, register: 1 };
+let loopHover = null; // the cell under the mouse: { step, register }, the one a click would change
 function renderLoop() {
   const playing = [...$('loop').children].findIndex((el) => el.classList.contains('now'));
   $('loop').innerHTML = sequencer.loop
@@ -777,7 +778,7 @@ function renderLoop() {
       const cells = [3, 2, 1, 0]
         .map((register) => {
           const colour = step[register];
-          const cursor = i === loopCursor.step && register === loopCursor.register ? ' cursor' : '';
+          const cursor = (i === loopCursor.step && register === loopCursor.register ? ' cursor' : '') + (loopHover && i === loopHover.step && register === loopHover.register ? ' hover' : '');
           return colour ? `<span class="loop-cell loop-note${cursor}" data-paint="${colour}"></span>` : `<span class="loop-cell${cursor}"></span>`;
         })
         .join('');
@@ -818,16 +819,34 @@ function withoutNote(loop, index, register) {
   return next;
 }
 
+/** The cell under a pointer: the step it's over, and the row by its height in that step. */
+function cellAt(event) {
+  const column = event.target.closest?.('.loop-step');
+  if (!column) return null;
+  const box = column.getBoundingClientRect();
+  return {
+    step: [...$('loop').children].indexOf(column),
+    register: 3 - Math.min(3, Math.max(0, Math.floor(((event.clientY - box.top) / box.height) * 4))),
+  };
+}
+
+/** Marks the cell a click would change (mouse only; a finger has no hover). */
+function hoverAt(event) {
+  const cell = event.pointerType === 'touch' ? null : cellAt(event);
+  if (cell?.step === loopHover?.step && cell?.register === loopHover?.register) return;
+  loopHover = cell;
+  $('loop').querySelectorAll('.loop-cell.hover').forEach((el) => el.classList.remove('hover'));
+  if (cell) $('loop').children[cell.step].children[3 - cell.register].classList.add('hover');
+}
+
 /**
  * Tapping the roll: the step under the finger, in the row under it. With
  * ⌘ or Ctrl held, a click removes the note there, whatever its colour.
  */
 function editAt(event) {
-  const column = event.target.closest('.loop-step');
-  if (!column) return;
-  const index = [...$('loop').children].indexOf(column);
-  const box = column.getBoundingClientRect();
-  const register = 3 - Math.min(3, Math.max(0, Math.floor(((event.clientY - box.top) / box.height) * 4)));
+  const cell = cellAt(event);
+  if (!cell) return;
+  const { step: index, register } = cell;
   if (event.metaKey || event.ctrlKey) {
     if (sequencer.loop[index][register]) changeLoop(withoutNote(sequencer.loop, index, register), index, register);
     return;
@@ -955,9 +974,44 @@ function setUpLoop() {
     editAt(e);
   });
   $('loop').addEventListener('keydown', editByKey);
+  $('loop').addEventListener('pointermove', hoverAt);
+  $('loop').addEventListener('pointerleave', () => hoverAt({ target: document.body }));
   $('loop').addEventListener('contextmenu', (e) => e.preventDefault()); // Ctrl-click removes a note on a Mac, not a menu
   $('loop-play-icon').innerHTML = PLAY_ICON;
   loopFromHash();
+}
+
+// ---------- Theme ----------
+
+// The theme button cycles System → Light → Dark, remembered in this browser.
+// The head script in index.html applies it (window.applyTheme) before the
+// page paints; this keeps the button's icon and label in step.
+const THEMES = {
+  system: { next: 'light', name: 'System', icon: '<path d="m7.866 15.696-1 1.733-1.732-1 1-1.733zm7 .732-1.732 1-1-1.732 1.732-1zm-4.66-10.423a4 4 0 010 7.99L10 14a4 4 0 010-8zM10 12a2 2 0 00.204-3.99L10 8zm-6-1H2V9h2zm14 0h-2V9h2zM7.866 4.304l-1.732 1-1-1.733 1.732-1zm7-.732-1 1.732-1.732-1 1-1.732z"/>' }, // cdxIconHalfBright
+  light: { next: 'dark', name: 'Light', icon: '<path d="m7.866 15.696-2 3.464-1.732-1 2-3.464zm8 2.464-1.732 1-2-3.464 1.732-1zM10 6a4 4 0 110 8 4 4 0 010-8m0 2a2 2 0 100 4 2 2 0 000-4m-6 3H0V9h4zm16 0h-4V9h4zM7.866 4.304l-1.732 1-2-3.464 1.732-1zm8-2.464-2 3.464-1.732-1 2-3.464z"/>' }, // cdxIconBright
+  dark: { next: 'system', name: 'Dark', icon: '<path d="M11.426 2.525c-1.287 2.085-1.379 4.72 0 6.948 1.385 2.239 3.924 3.522 6.575 3.525l.85 1.525a9.27 9.27 0 01-3.515 3.285c-4.54 2.445-10.375 1.018-13.037-3.283C-.39 10.18 1.24 4.657 5.814 2.191A10 10 0 0110.577 1zm-2.511.644a8 8 0 00-2.153.783C3.137 5.905 1.954 10.166 4 13.472c2.073 3.352 6.726 4.547 10.387 2.575a7.5 7.5 0 001.687-1.236c-2.562-.496-4.916-1.97-6.35-4.286a8.5 8.5 0 01-.81-7.356Z"/>' }, // cdxIconMoon
+};
+
+function showTheme(choice) {
+  const theme = THEMES[choice] || THEMES.system;
+  $('theme-icon').innerHTML = theme.icon;
+  const label = `Theme: ${theme.name}. Switch to ${THEMES[theme.next].name}`;
+  $('theme').setAttribute('aria-label', label);
+  $('theme').title = label;
+}
+
+function setUpTheme() {
+  showTheme(document.documentElement.dataset.themeChoice);
+  $('theme').addEventListener('click', () => {
+    const next = THEMES[document.documentElement.dataset.themeChoice || 'system'].next;
+    window.applyTheme(next);
+    try {
+      if (next === 'system') localStorage.removeItem('mondrian-theme');
+      else localStorage.setItem('mondrian-theme', next);
+    } catch {}
+    showTheme(next);
+    toast(`Theme: ${THEMES[next].name}`);
+  });
 }
 
 // ---------- Sharing ----------
@@ -992,6 +1046,7 @@ function start() {
   setUpPicker();
   setUpTuning();
   setUpLoop();
+  setUpTheme();
   $('reset').addEventListener('click', reset);
   $('new-sound').addEventListener('click', newSound);
   $('share').addEventListener('click', share);
