@@ -60,7 +60,7 @@ python3 serve.py   # like http.server, but with caching off so reloads pick up e
 - `js/scales.js`: pitches and moods, and the notes each size and colour plays
 - `js/infinity.js`: the infinity-track slider behind Pitch
 - `js/knob.js`: the notched knob behind Mood
-- `js/sequencer.js`: the loop: sixteen random steps played on the audio clock at a chosen tempo
+- `js/sequencer.js`: the loop: sixteen steps of notes and drums (kick, snare, hi-hat), played on the audio clock at a chosen tempo, with random grooves
 - `js/pedal.js`: each article card's pedal face: a knob beside its sound and the sound drawn on a display
 - `js/mood-pictures.js`: each mood's picture on the knob, from Wikimedia Commons, with its credit
 - `js/app.js`: UI, article picker, pitch, mood and octave, share link

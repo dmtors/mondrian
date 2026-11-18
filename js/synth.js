@@ -119,6 +119,8 @@ export class Synth {
     }
 
     osc.connect(filter).connect(env).connect(this.out);
+    // Tell whoever's listening (the cards' displays) when it sounds and how long it rings.
+    this.onNote?.(t - ctx.currentTime, sound.decaySec);
     osc.start(t);
     osc.stop(t + length);
     osc.onended = () => {
@@ -129,6 +131,82 @@ export class Synth {
     };
   }
 }
+
+/**
+ * The sequencer's drums, synthesized (no samples): a kick, a sine dropping
+ * fast from 150 Hz to 45 Hz with a short thump; a snare, a snappy crack of
+ * bright noise over a quick tap; and a closed hi-hat, a tick of very bright
+ * noise. They play through the same
+ * compressor as the notes, whatever the articles' sound.
+ */
+Synth.prototype.drum = function drum(kind, when = null) {
+  this.wake();
+  const { ctx } = this;
+  const t = Math.max(when ?? 0, ctx.currentTime) + 0.005;
+  if (kind === 'kick') {
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.9, t + 0.004);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+    osc.connect(env).connect(this.out);
+    osc.start(t);
+    osc.stop(t + 0.4);
+    osc.onended = () => { osc.disconnect(); env.disconnect(); };
+    return;
+  }
+  // Noise, made once: the snare's rattle and the hi-hat.
+  if (!this.noise) {
+    const length = Math.floor(ctx.sampleRate * 0.3);
+    this.noise = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = this.noise.getChannelData(0);
+    for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  const parts = [];
+  const noiseBurst = (filterType, frequency, q, gain, decay) => {
+    const noise = ctx.createBufferSource();
+    noise.buffer = this.noise;
+    const filter = ctx.createBiquadFilter();
+    filter.type = filterType;
+    filter.frequency.value = frequency;
+    filter.Q.value = q;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(gain, t + 0.001);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    noise.connect(filter).connect(env).connect(this.out);
+    noise.start(t);
+    noise.stop(t + decay + 0.02);
+    parts.push(noise, filter, env);
+    return noise;
+  };
+  if (kind === 'hat') {
+    // A closed hi-hat: a very short tick of bright noise.
+    const noise = noiseBurst('highpass', 7500, 0.7, 0.22, 0.045);
+    noise.onended = () => parts.forEach((p) => p.disconnect());
+    return;
+  }
+  // Snare: snappy. A short crack of bright noise (a band round 3.5 kHz over
+  // a high-pass), and a quick pitched tap for the body, both gone in a
+  // tenth of a second or so.
+  noiseBurst('highpass', 1800, 0.7, 0.5, 0.12);
+  noiseBurst('bandpass', 3500, 1.2, 0.35, 0.06);
+  const body = ctx.createOscillator();
+  body.type = 'triangle';
+  body.frequency.setValueAtTime(240, t);
+  body.frequency.exponentialRampToValueAtTime(160, t + 0.04);
+  const bodyEnv = ctx.createGain();
+  bodyEnv.gain.setValueAtTime(0.0001, t);
+  bodyEnv.gain.exponentialRampToValueAtTime(0.4, t + 0.001);
+  bodyEnv.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+  body.connect(bodyEnv).connect(this.out);
+  body.start(t);
+  body.stop(t + 0.15);
+  parts.push(body, bodyEnv);
+  body.onended = () => parts.forEach((p) => p.disconnect());
+};
 
 function clamp(x, lo, hi) {
   return Math.min(hi, Math.max(lo, x));

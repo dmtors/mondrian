@@ -438,6 +438,7 @@ a:visited { color: var(--color-visited); }
    articles and controls. Narrow: the steps across the top, and Play, the
    tempo and New loop evenly along the bottom. Wide: all in one row. */
 .sequencer.cdx-card {
+  --loop-height: calc(var(--size-400) * 1.75); /* seven rows a finger can tell apart */
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); /* the tempo in the very middle */
@@ -464,7 +465,7 @@ a:visited { color: var(--color-visited); }
     /* Two small buttons and a line of text are a touch taller than the
        steps; let the stack overhang the padding by the difference, so the
        card stays as tall as the steps. */
-    margin-block: calc((var(--size-400) - 2 * var(--size-150) - var(--line-height-small)) / 2);
+    margin-block: calc((var(--loop-height) - 2 * var(--size-150) - var(--line-height-small)) / 2);
   }
 }
 
@@ -480,7 +481,7 @@ a:visited { color: var(--color-visited); }
      2px between neighbouring cells. */
   grid-template-columns: repeat(16, minmax(0, 1fr));
   column-gap: 0;
-  height: var(--size-400); /* four rows a finger can tell apart */
+  height: var(--loop-height);
   cursor: pointer;
   touch-action: manipulation;
   user-select: none;
@@ -490,7 +491,7 @@ a:visited { color: var(--color-visited); }
 .loop:focus-visible { outline: none; }
 .loop-step {
   display: grid;
-  grid-template-rows: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(7, minmax(0, 1fr)); /* four sizes, then hi-hat, snare and kick */
   row-gap: 2px;
   padding: 1px 1px 4px; /* 1px a side makes the 2px between cells; the bottom leaves room for the playing bar */
   border-radius: var(--border-radius-sharp);
@@ -504,8 +505,8 @@ a:visited { color: var(--color-visited); }
 /* A cell per row; a note fills its cell, outlined dark like the cards. */
 .loop-cell { border-radius: var(--border-radius-pill); }
 /* An empty cell: a small dot in its middle, so the grid shows where notes can go. */
-.loop-cell:not(.loop-note) { display: grid; place-items: center; }
-.loop-cell:not(.loop-note)::after {
+.loop-cell:not(.loop-note, .loop-drum) { display: grid; place-items: center; }
+.loop-cell:not(.loop-note, .loop-drum)::after {
   content: '';
   width: 3px;
   height: 3px;
@@ -514,6 +515,13 @@ a:visited { color: var(--color-visited); }
 }
 /* The cell a click would change (see hoverAt in app.js): a dark 2px outline inside it. */
 .loop-cell.hover { box-shadow: inset 0 0 0 2px var(--border-color-emphasized); }
+/* The drums, in the three rows under the notes: a hi-hat is a cell filled
+   mid grey, a snare a cell outlined dark grey, a kick a cell filled dark grey. (A hovered kick shows a light ring
+   inside, as its dark outline wouldn't show on its dark fill.) */
+.loop-kick { background-color: var(--border-color-emphasized); }
+.loop-hat { background-color: var(--border-color-base); }
+.loop-snare { box-shadow: inset 0 0 0 1px var(--border-color-emphasized); }
+.loop-kick.hover { box-shadow: inset 0 0 0 2px var(--border-color-emphasized), inset 0 0 0 3px var(--background-color-base); }
 /* The keyboard's cell: a dark ring round it. */
 .loop:focus-visible .loop-cell.cursor { box-shadow: 0 0 0 var(--border-width-thick) var(--focus-color); }
 .loop-note[data-paint="red"] { background-color: var(--paint-red); }

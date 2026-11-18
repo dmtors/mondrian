@@ -3,9 +3,9 @@ import { KEYS as KEY_NAMES, MOODS, OCTAVE_SHIFTS, DEFAULT_KEY, DEFAULT_MOOD, ton
 import { knob } from './knob.js';
 import { MOOD_PICTURES, commonsPage } from './mood-pictures.js';
 import { infinity } from './infinity.js';
-import { KNOB_MARKUP, SCREEN_MARKUP, drawPedal } from './pedal.js';
+import { KNOB_MARKUP, SCREEN_MARKUP, drawPedal, pulsePedals } from './pedal.js';
 import { Synth, SoundMap, soundOf } from './synth.js';
-import { Sequencer, STEPS, TEMPO, randomLoop, encodeLoop, decodeLoop, clampTempo, tempoText, editStep, notesOf } from './sequencer.js';
+import { Sequencer, STEPS, TEMPO, randomLoop, encodeLoop, decodeLoop, clampTempo, tempoText, editStep, notesOf, isDrum, LANE_ORDER, DRUM_NAMES } from './sequencer.js';
 import { articleSignals, search, articleUrl, randomArticle, SURPRISES, STARTER } from './wiki.js';
 
 const LABELS = { waveform: 'Waveform', filter: 'Filter', envelope: 'Envelope', effect: 'Effect' };
@@ -63,6 +63,8 @@ const KEY_NOTES = new Map(KEY_ROWS.flatMap((row, register) => row.map((code, c) 
 
 const $ = (id) => document.getElementById(id);
 const synth = new Synth();
+// Every note, from the painting, the keyboard or the loop, livens the cards' displays as it sounds.
+synth.onNote = (delaySec, ringSec) => setTimeout(() => pulsePedals(ringSec), delaySec * 1000);
 
 const state = {
   titles: {}, // slot → title (drives the painting, even before the article loads)
@@ -754,6 +756,7 @@ const sequencer = new Sequencer({
     return synth.ctx;
   },
   play: (note, when) => synth.strike(state.tones[note.register][COLOURS.indexOf(note.colour)], when),
+  drum: (kind, when) => synth.drum(kind, when),
   onStep: (index, delayMs) => setTimeout(() => showStep(index), delayMs),
 });
 
@@ -765,9 +768,11 @@ function showStep(index) {
 }
 
 /**
- * The piano roll: a column per step, and in it a cell per size's row
- * (squares on top), a note's cell in its colour. The keyboard's cursor is a
- * cell: [step, register].
+ * The piano roll: a column per step, and in it a cell per lane (see
+ * LANE_ORDER): the four sizes' rows (squares on top), a note's cell in its
+ * colour, then the hi-hat's row (a mid grey cell when it hits), the
+ * snare's (an outlined one) and the kick's (a filled one). The keyboard's cursor is a cell: [step, register],
+ * register being the lane (0–3 a size, then KICK, SNARE and HAT).
  */
 const loopCursor = { step: 0, register: 1 };
 let loopHover = null; // the cell under the mouse: { step, register }, the one a click would change
@@ -775,11 +780,12 @@ function renderLoop() {
   const playing = [...$('loop').children].findIndex((el) => el.classList.contains('now'));
   $('loop').innerHTML = sequencer.loop
     .map((step, i) => {
-      const cells = [3, 2, 1, 0]
+      const cells = LANE_ORDER
         .map((register) => {
-          const colour = step[register];
+          const on = step[register];
           const cursor = (i === loopCursor.step && register === loopCursor.register ? ' cursor' : '') + (loopHover && i === loopHover.step && register === loopHover.register ? ' hover' : '');
-          return colour ? `<span class="loop-cell loop-note${cursor}" data-paint="${colour}"></span>` : `<span class="loop-cell${cursor}"></span>`;
+          if (isDrum(register)) return `<span class="loop-cell${on ? ` loop-drum loop-${DRUM_NAMES[register]}` : ''}${cursor}"></span>`;
+          return on ? `<span class="loop-cell loop-note${cursor}" data-paint="${on}"></span>` : `<span class="loop-cell${cursor}"></span>`;
         })
         .join('');
       return `<span class="loop-step${i === playing ? ' now' : ''}">${cells}</span>`;
@@ -788,12 +794,13 @@ function renderLoop() {
 }
 
 /** A step's notes, as the screen reader hears them. */
-const REGISTER_NAMES = ['large block', 'medium block', 'small block', 'square'];
+const REGISTER_NAMES = ['large block', 'medium block', 'small block', 'square', 'kick', 'snare', 'hi-hat'];
 const describeCursor = () => {
   const { step, register } = loopCursor;
-  const colour = sequencer.loop[step][register];
-  const notes = notesOf(sequencer.loop[step]);
-  return `Step ${step + 1}, ${REGISTER_NAMES[register]} row: ${colour || 'empty'}. The step plays ${notes.length ? notes.map((n) => `${n.colour} ${REGISTER_NAMES[n.register]}`).join(', ') : 'nothing'}.`;
+  const here = sequencer.loop[step][register];
+  const sounds = LANE_ORDER.filter((lane) => sequencer.loop[step][lane]).map((lane) => (isDrum(lane) ? REGISTER_NAMES[lane] : `${sequencer.loop[step][lane]} ${REGISTER_NAMES[lane]}`));
+  const status = isDrum(register) ? (here ? 'on' : 'off') : here || 'empty';
+  return `Step ${step + 1}, ${REGISTER_NAMES[register]} row: ${status}. The step plays ${sounds.length ? sounds.join(', ') : 'nothing'}.`;
 };
 
 /** Changes the loop to [loop] after editing the cell [index, register], plays that note so you hear it, and keeps it in the link. */
@@ -801,10 +808,11 @@ function changeLoop(loop, index, register) {
   sequencer.loop = loop;
   Object.assign(loopCursor, { step: index, register });
   renderLoop();
-  const colour = loop[index][register];
-  if (colour && !looping()) {
+  const on = loop[index][register];
+  if (on && !looping()) {
     synth.wake();
-    synth.strike(state.tones[register][COLOURS.indexOf(colour)]);
+    if (isDrum(register)) synth.drum(DRUM_NAMES[register]);
+    else synth.strike(state.tones[register][COLOURS.indexOf(on)]);
   }
   $('loop').setAttribute('aria-label', `Loop steps. ${describeCursor()}`);
   state.loopShared = true;
@@ -824,10 +832,9 @@ function cellAt(event) {
   const column = event.target.closest?.('.loop-step');
   if (!column) return null;
   const box = column.getBoundingClientRect();
-  return {
-    step: [...$('loop').children].indexOf(column),
-    register: 3 - Math.min(3, Math.max(0, Math.floor(((event.clientY - box.top) / box.height) * 4))),
-  };
+  const rows = LANE_ORDER.length;
+  const row = Math.min(rows - 1, Math.max(0, Math.floor(((event.clientY - box.top) / box.height) * rows)));
+  return { step: [...$('loop').children].indexOf(column), register: LANE_ORDER[row] };
 }
 
 /** Marks the cell a click would change (mouse only; a finger has no hover). */
@@ -836,12 +843,12 @@ function hoverAt(event) {
   if (cell?.step === loopHover?.step && cell?.register === loopHover?.register) return;
   loopHover = cell;
   $('loop').querySelectorAll('.loop-cell.hover').forEach((el) => el.classList.remove('hover'));
-  if (cell) $('loop').children[cell.step].children[3 - cell.register].classList.add('hover');
+  if (cell) $('loop').children[cell.step].children[LANE_ORDER.indexOf(cell.register)].classList.add('hover');
 }
 
 /**
  * Tapping the roll: the step under the finger, in the row under it. With
- * ⌘ or Ctrl held, a click removes the note there, whatever its colour.
+ * ⌘ or Ctrl held, a click removes the note (or drum) there, whatever its colour.
  */
 function editAt(event) {
   const cell = cellAt(event);
@@ -854,14 +861,17 @@ function editAt(event) {
   changeLoop(editStep(sequencer.loop, index, register), index, register);
 }
 
-/** The keyboard on the roll: the arrows move between cells, Enter adds a note or changes its colour, Delete removes it. */
+/** The keyboard on the roll: the arrows move between cells, Enter adds a note (or changes its colour) or switches a drum on or off, Delete removes it. */
 function editByKey(e) {
   const move = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
-  const lift = { ArrowUp: 1, ArrowDown: -1 }[e.key];
+  const lift = { ArrowUp: -1, ArrowDown: 1 }[e.key]; // rows, top to bottom
   const { step, register } = loopCursor;
   if (move || lift) {
     if (move) loopCursor.step = (step + move + STEPS) % STEPS;
-    else loopCursor.register = Math.min(3, Math.max(0, register + lift));
+    else {
+      const row = Math.min(LANE_ORDER.length - 1, Math.max(0, LANE_ORDER.indexOf(register) + lift));
+      loopCursor.register = LANE_ORDER[row];
+    }
     renderLoop();
     $('loop').setAttribute('aria-label', `Loop steps. ${describeCursor()}`);
   } else if (e.key === 'Enter') {
