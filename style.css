@@ -452,11 +452,21 @@ a:visited { color: var(--color-visited); }
 .loop-play { grid-area: play; justify-self: start; }
 .loop { grid-area: roll; }
 .tempo { grid-area: tempo; justify-self: center; }
-.loop-new { grid-area: new; justify-self: end; }
+.loop-dice { grid-area: new; justify-self: end; display: flex; align-items: center; gap: var(--spacing-25); }
+.loop-back { order: 1; }
+.loop-new { order: 2; }
+.loop-forward { order: 3; }
 @container panel (min-width: 560px) {
   .sequencer.cdx-card {
     grid-template-columns: auto minmax(0, 1fr) auto auto;
     grid-template-areas: "play roll tempo new";
+  }
+  /* In one row, back goes above the die and forward below it, the stack
+     overhanging the padding (as the tempo's does) so the card stays as
+     tall as the steps. */
+  .loop-dice {
+    flex-direction: column;
+    margin-block: calc((var(--loop-height) - 2 * var(--size-150) - var(--size-275) - 2 * var(--spacing-25)) / 2);
   }
   /* In one row, the tempo stacks (+ above the number, − below) to leave
      the steps more width. */

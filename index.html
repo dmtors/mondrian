@@ -92,7 +92,8 @@
         <!-- The loop (see sequencer.js): play/stop, the sixteen steps as a little
              piano roll (higher rows play higher, in the notes' colours), the
              tempo, and a new random loop. Icons: Codex cdxIconPlay, cdxIconStop,
-             cdxIconSubtract, cdxIconAdd, cdxIconDie -->
+             cdxIconSubtract, cdxIconAdd, cdxIconDie; beside the die, undo and
+             redo for every change to the loop -->
         <section class="cdx-card control sequencer" aria-label="Loop">
           <button type="button" class="cdx-button cdx-button--icon-only cdx-button--size-large loop-play" id="loop-play" aria-label="Play loop" title="Play loop (Space)">
             <span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true" id="loop-play-icon"></svg></span>
@@ -104,7 +105,12 @@
             <span class="tempo-readout" id="tempo" role="slider" tabindex="0" aria-label="Tempo" aria-valuemin="60" aria-valuemax="180" title="Drag sideways to change the tempo (Shift: faster)"></span>
             <button type="button" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only cdx-button--size-small" id="tempo-up" aria-label="Faster" title="Faster (Shift: 5 BPM)"><span class="cdx-icon cdx-icon--small"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11 9h7v2h-7v7H9v-7H2V9h7V2h2z"/></svg></span></button>
           </div>
+          <div class="loop-dice" role="group" aria-label="Loops">
+          <!-- Icons: Codex cdxIconUndo, cdxIconRedo -->
+          <button type="button" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only cdx-button--size-small loop-back" id="loop-back" aria-label="Undo" title="Undo (⌘Z)" disabled><span class="cdx-icon cdx-icon--small"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m9.124 4-3 3H11a6 6 0 016 6v5h-2v-5a4 4 0 00-4-4H6.124l3 3-1.414 1.414-4.707-4.707V7.293L7.71 2.586z"/></svg></span></button>
+          <button type="button" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only cdx-button--size-small loop-forward" id="loop-forward" aria-label="Redo" title="Redo (⇧⌘Z)" disabled><span class="cdx-icon cdx-icon--small"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M17 7.293v1.414l-4.69 4.707L10.895 12l3-3H9a4 4 0 00-4 4v5H3v-5a6 6 0 016-6h4.896l-3-3 1.414-1.414z"/></svg></span></button>
           <button type="button" class="cdx-button cdx-button--icon-only cdx-button--size-large loop-new" id="loop-new" aria-label="New loop" title="New loop"><span class="cdx-icon cdx-icon--medium"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M19 19H1V1h18zM3 17h14V3H3z"/><circle cx="6.5" cy="6.5" r="1.5"/><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="6.5" cy="13.5" r="1.5"/><circle cx="13.5" cy="13.5" r="1.5"/></svg></span></button>
+          </div>
         </section>
       </div>
 
@@ -166,7 +172,7 @@
           <li><b>Effect</b>: the more recently it was updated, the more the note wobbles. A trending article shimmers.</li>
         </ul>
         <p>Each color is a note. Yellow is the home note, and red, blue and grey are the notes that go with it, so there are no wrong notes. Turn <b>Pitch</b> to move them all up or down, turn <b>Mood</b> (its picture shows the mood) to change which notes go together, from dreamy to spooky, and press <b>Octave</b> to move everything higher or lower. The same note lives all over the painting, and its size picks the octave: the squares on the streets are highest, then small blocks, medium blocks and large blocks, an octave lower each. White is quiet. Drag along a street to play a run.</p>
-        <p>Press <b>Play</b> under the controls to hear a loop: sixteen steps of random notes from the painting, drawn as a little piano roll in their colors (higher rows play higher). Tap the piano roll to write your own: tap an empty row to add a note (a step can play one in every row at once, as a chord), and tap a note to change its color (past grey, it goes). The three rows at the bottom are drums: a mid grey cell is a hi-hat, an outlined one a snare, and a dark one a kick; tap to switch them on or off. Hold <kbd>⌘</kbd> or <kbd>Ctrl</kbd> and click a note or drum to remove it. Change the tempo with <b>−</b> and <b>+</b> (half a beat a minute; hold <kbd>Shift</kbd> for five), or press the die for a new loop. Turning Pitch, Mood or Octave changes the loop as it plays.</p>
+        <p>Press <b>Play</b> under the controls to hear a loop: sixteen steps of random notes from the painting, drawn as a little piano roll in their colors (higher rows play higher). Tap the piano roll to write your own: tap an empty row to add a note (a step can play one in every row at once, as a chord), and tap a note to change its color (past grey, it goes). The three rows at the bottom are drums: a mid grey cell is a hi-hat, an outlined one a snare, and a dark one a kick; tap to switch them on or off. Hold <kbd>⌘</kbd> or <kbd>Ctrl</kbd> and click a note or drum to remove it. Change the tempo with <b>−</b> and <b>+</b> (half a beat a minute; hold <kbd>Shift</kbd> for five), or press the die for a new loop; the arrows beside it undo and redo changes to the loop's notes and drums (or press <kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>Z</kbd>, with <kbd>Shift</kbd> to redo). Turning Pitch, Mood or Octave changes the loop as it plays.</p>
         <p>The four article titles decide where the streets and blocks go and how the squares are colored: the same articles always make the same painting.</p>
       </div>
     </form>

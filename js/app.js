@@ -514,8 +514,14 @@ function setUpPlaying() {
   svg.addEventListener('pointercancel', lift);
 
   document.addEventListener('keydown', (e) => {
-    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
     if (document.querySelector('dialog[open]') || e.target.closest?.('input, textarea, select')) return;
+    // ⌘Z / Ctrl+Z undoes a change to the loop; with Shift (or Ctrl+Y), redoes it.
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.code === 'KeyZ' || (e.code === 'KeyY' && e.ctrlKey))) {
+      e.preventDefault();
+      goToLoop(e.shiftKey || e.code === 'KeyY' ? 1 : -1);
+      return;
+    }
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
     // − and + (with or without Shift, or on the number pad) move the octave.
     const octave = { '-': 'octave-down', _: 'octave-down', '+': 'octave-up', '=': 'octave-up' }[e.key];
     if (octave) {
@@ -803,9 +809,40 @@ const describeCursor = () => {
   return `Step ${step + 1}, ${REGISTER_NAMES[register]} row: ${status}. The step plays ${sounds.length ? sounds.join(', ') : 'nothing'}.`;
 };
 
+/**
+ * Undo and redo for the loop's pattern: every change to it, a roll of the
+ * die or an edit in the piano roll, is a step back and forth along this
+ * list. (The tempo isn't part of it.) Changing the pattern after going
+ * back drops the steps ahead, as undo does anywhere.
+ */
+const loops = { list: [], at: 0 };
+function showUndo() {
+  $('loop-back').disabled = loops.at === 0;
+  $('loop-forward').disabled = loops.at >= loops.list.length - 1;
+}
+/** Records the pattern as it is now. */
+function rememberLoop() {
+  if (loops.list.length) loops.list.length = loops.at + 1; // drop anything undone
+  loops.list.push(sequencer.loop);
+  loops.at = loops.list.length - 1;
+  showUndo();
+}
+/** Undoes (−1) or redoes (1) a change to the pattern. */
+function goToLoop(step) {
+  const at = loops.at + step;
+  if (at < 0 || at >= loops.list.length) return;
+  loops.at = at;
+  sequencer.loop = loops.list[at];
+  renderLoop();
+  showUndo();
+  state.loopShared = true;
+  writeHash();
+}
+
 /** Changes the loop to [loop] after editing the cell [index, register], plays that note so you hear it, and keeps it in the link. */
 function changeLoop(loop, index, register) {
   sequencer.loop = loop;
+  rememberLoop();
   Object.assign(loopCursor, { step: index, register });
   renderLoop();
   const on = loop[index][register];
@@ -930,6 +967,7 @@ function setUpLoop() {
   $('loop-play').addEventListener('click', () => setPlaying(!sequencer.playing));
   $('loop-new').addEventListener('click', () => {
     sequencer.loop = randomLoop();
+    rememberLoop();
     renderLoop();
     state.loopShared = true;
     writeHash();
@@ -962,16 +1000,24 @@ function setUpLoop() {
   });
   readout.addEventListener('pointermove', (e) => {
     if (!scrub) return;
+    // No button down means the release was missed (it happened off the
+    // page, or the capture was lost): the drag is over.
+    if (e.pointerType === 'mouse' && e.buttons === 0) return endScrub();
     const steps = Math.round((e.clientX - scrub.x) / PX_PER_STEP);
     setTempo(scrub.from + steps * TEMPO.step * (e.shiftKey ? 10 : 1));
   });
   const endScrub = () => {
+    if (!scrub) return;
     scrub = null;
     readout.classList.remove('scrubbing');
     document.documentElement.classList.remove('scrubbing');
   };
-  readout.addEventListener('pointerup', endScrub);
-  readout.addEventListener('pointercancel', endScrub);
+  // The drag ends on any release, wherever it happens, and if the readout
+  // loses hold of the pointer.
+  window.addEventListener('pointerup', endScrub);
+  window.addEventListener('pointercancel', endScrub);
+  readout.addEventListener('lostpointercapture', endScrub);
+  window.addEventListener('blur', endScrub);
   readout.addEventListener('keydown', (e) => {
     const direction = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
     if (!direction) return;
@@ -987,8 +1033,11 @@ function setUpLoop() {
   $('loop').addEventListener('pointermove', hoverAt);
   $('loop').addEventListener('pointerleave', () => hoverAt({ target: document.body }));
   $('loop').addEventListener('contextmenu', (e) => e.preventDefault()); // Ctrl-click removes a note on a Mac, not a menu
+  $('loop-back').addEventListener('click', () => goToLoop(-1));
+  $('loop-forward').addEventListener('click', () => goToLoop(1));
   $('loop-play-icon').innerHTML = PLAY_ICON;
   loopFromHash();
+  rememberLoop(); // where undo stops: the loop the page opened with
 }
 
 // ---------- Theme ----------
